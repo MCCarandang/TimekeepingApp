@@ -1,0 +1,5 @@
+<form method="post">
+    {% csrf_token %}
+    <input type="text" name="rfid_tag" placeholder="Scan your RFID tag" required>
+    <button type="submit">Submit</button>
+</form>
