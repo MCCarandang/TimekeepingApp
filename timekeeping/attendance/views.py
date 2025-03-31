@@ -20,17 +20,22 @@ def home(request):
         })  # Gets the current date and time using Django's timezone.now(). This ensures time is stored in a timezone-aware format.
 
 def check_in_out(user_id):
-    last_record = Attendance.objects.filter(user_id=user_id).order_by('timestamp').first()
+    last_record = Attendance.objects.filter(rfid_tag=user_id).order_by('timestamp').first()
     if last_record and last_record.status == 'IN':
         # User is currently IN, so we log them OUT
-        Attendance.objects.create(user_is=user_id, status='OUT')
+        Attendance.objects.create(rfid_tag=user_id, status='OUT')
         return 'OUT'
     else:
         # User is currently OUT, so we log them IN
-        Attendance.objects.create(user_is=user_id, status='IN')
+        Attendance.objects.create(rfid_tag=user_id, status='IN')
         return 'IN'
     
 # Django view that calls check_in_out()
-def check_in_out(request, user_id):
-    status = check_in_out(user_id)  # call the function
-    return JsonResponse({'user_is': user_id, 'status':status})  # Return JSON response
+def record_attnedance(request):
+    if request.method == 'POST':
+        rfid_tag = request.POST.get('rfid_tag')
+        status = check_in_out('rfid_tag')  # call the function to checkin/out
+        current_time = timezone.now()   # Get the current time
+
+        return JsonResponse({'rfid_tag': rfid_tag, 'status':status, 'timestamp': current_time.strftime("%Y-%m-%d %H:%M:%S")})  # Return JSON response
+    return JsonResponse({'error': 'Invalid request'}, status=400)
