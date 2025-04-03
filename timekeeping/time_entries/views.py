@@ -7,7 +7,7 @@ from django.contrib.auth.models import User
 # Set a threshold for the time difference (e.g., 5 seconds)
 TIME_THRESHOLD = 5 # Seconds
 
-def log_time_entry(request):
+def time_entries_list(request):
     if request.method =='POST':
         rfid_tag = request.POST.get('rfid_tag')
         user = User.objects.get(rfid_tag=rfid_tag)     # Assuming you have a way to get the user by RFID
