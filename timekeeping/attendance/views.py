@@ -31,7 +31,7 @@ def check_in_out(user_id):
         return 'IN'
     
 # Django view that calls check_in_out()
-def record_attnedance(request):
+def record_attendance(request):
     if request.method == 'POST':
         rfid_tag = request.POST.get('rfid_tag')
         status = check_in_out('rfid_tag')  # call the function to checkin/out
