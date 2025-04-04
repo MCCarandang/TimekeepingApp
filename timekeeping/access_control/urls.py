@@ -1,6 +1,6 @@
 from django.urls import path
-from .views import access_control
+from .import views
 
 urlpatterns = [
-    path('', access_control, name='access_control'),
+    path('', views.access_control, name='access_control'),
 ]
