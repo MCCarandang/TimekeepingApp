@@ -16,11 +16,8 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from .views import time_entries_list
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('attendance.urls')),
-    path('access/', include('access_control.urls')),
-    path('entries/', include('time_entries.urls')),
 ]

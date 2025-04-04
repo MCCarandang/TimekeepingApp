@@ -41,7 +41,6 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'attendance',
     'access_control',
-    'time_entries',
 ]
 
 MIDDLEWARE = [
