@@ -25,7 +25,7 @@ def connect_db():
     return mysql.connector.connect(
         host="10.44.0.170",
         user="ojt",
-        password="ojt123"
+        password="ojt123",
         database="timekeeping_app.db"
     )
 
@@ -39,10 +39,10 @@ def check_rfid(rfid_id):
     return result
 
 # Log unauthorized attempt
-def log_unauthorized_attempt(rfid, photo=None):
+def log_unauthorized_attempt(rfid_id, photo=None):
     conn = connect_db()
     cursor = conn.cursor()
-    cursor.execute("INSER INTO unaut_logs (rfid_id, status, photo) VALUES (%s, %s, %s)",
+    cursor.execute("INSER INTO unauth_logs (rfid_id, status, photo) VALUES (%s, %s, %s)",
                    (rfid_id, "unauthorized", photo))
     conn.commit()
     conn.close()
