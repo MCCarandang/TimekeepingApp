@@ -1,7 +1,7 @@
 import time
 from time import time
-# import RPi.GPIO as GPIO 
-# import mfrc522
+import RPi.GPIO as GPIO 
+import mfrc522
 import sqlite3
 import mysql.connector
 import os
@@ -18,14 +18,14 @@ from tkinter import messagebox
 # GPIO.setwarnings(False)
 
 # Initialize the RFID reader
-# reader = mfrc522.MFRC522()
+reader = mfrc522.MFRC522()
 
 # MySQL Database connection
 def connect_db():
     return mysql.connector.connect(
         host="10.44.0.170",
-        user="ojt",
-        password="ojt123",
+        user="raspberrypi",
+        password="12345",
         database="timekeeping_app.db"
     )
 
@@ -42,7 +42,7 @@ def check_rfid(rfid_id):
 def log_unauthorized_attempt(rfid_id, photo=None):
     conn = connect_db()
     cursor = conn.cursor()
-    cursor.execute("INSER INTO unauth_logs (rfid_id, status, photo) VALUES (%s, %s, %s)",
+    cursor.execute("INSERT INTO unauth_logs (rfid_id, status, photo) VALUES (%s, %s, %s)",
                    (rfid_id, "unauthorized", photo))
     conn.commit()
     conn.close()
