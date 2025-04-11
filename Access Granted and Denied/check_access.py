@@ -40,7 +40,6 @@ class access_granted(QMainWindow):
         grid_layout.setRowStretch(0, 1)
         grid_layout.setRowStretch(1, 2)
         grid_layout.setRowStretch(2, 1)
-        
         # Add the date and time label to the top-right (row 0, column 1)
         grid_layout.addWidget(self.date_time_label, 0, 1, alignment=Qt.AlignRight | Qt.AlignTop)
         
@@ -53,16 +52,47 @@ class access_granted(QMainWindow):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_date_time)
         self.timer.start(1000)	# Update every second
-        
-        # Initialize the date and time display
         self.update_date_time()
+        
+        self.rfid_timer = QTimer(self)
+        self.rfid_timer.timeout.connect(self.check_rfid)
+        self.rfid_timer.start(500)	# Check for RFID every 0.5 seconds
+        
+        #RFID reader
+        GPIO.setwarnings(False)
+        self.reader = SimpleMFRC522()
+
         
     def update_date_time(self):
         current_time = QDateTime.currentDateTime()
         date_str = current_time.toString("MM-dd-yyyy")
         time_str = current_time.toString("HH:mm:ss")
         self.date_time_label.setText(f"<div>{date_str}</div><div>{time_str}</div>")
-
+    
+    def check_rfid(self):
+        try:
+            id, text = self.reader.read_no_block()
+            
+            if id:
+                conn = sqlite3.connect('/home/raspberrypi/Desktop/TimekeepingApp/timekeeping_app.db')
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM emp_profiles WHERE rfid_id = ?", (str(id),))
+                result = cursor.fetchone()
+                conn.close()
+                
+                if result:
+                    self.access_granted_label.setText("ACCESS GRANTED")
+                
+                else:
+                    self.access_granted_label.setText("ACCESS DENIED")
+                
+                
+            # Reset label after 3 seconds
+            QTimer.singleShot(3000, lambda: self.access_granted_label.setText("TAP YOUR RFID TAG"))
+                              
+        except Exception as e:
+            print(f"Error reading RFID: {e}")
+                                                                             
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
             self.showNormal()
