@@ -3,7 +3,7 @@ from mfrc522 import SimpleMFRC522
 import sqlite3
 import time
 import os
-from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QGridLayout, QWidget
 from PyQt5.QtGui import QPalette, QColor
 from PyQt5.QtCore import Qt, QTimer, QDateTime
 import sys
@@ -26,26 +26,33 @@ class access_granted(QMainWindow):
         self.date_time_label.setStyleSheet("color: yellow; font-size: 20px;")
         self.date_time_label.setAlignment(Qt.AlignRight | Qt.AlignTop)
         
-        # Create a layout to hold the label
-        layout = QVBoxLayout()
-        layout.addWidget(self.date_time_label)
+        # Label for Access Granted
+        self.access_granted_label = QLabel("TAP YOUR RFID TAG", self)
+        self.access_granted_label.setStyleSheet("color: yellow; font-size: 40px;")
+        self.access_granted_label.setAlignment(Qt.AlignCenter)
         
-        # Create a central widget and set the layout
+        # Create a central widget and layout
         central_widget = QWidget(self)
-        central_widget.setLayout(layout)
+        grid_layout = QGridLayout()
+        
+        # Adjust Spacing
+        grid_layout.setContentsMargins(20, 20, 20, 20)
+        grid_layout.setRowStretch(0, 1)
+        grid_layout.setRowStretch(1, 2)
+        grid_layout.setRowStretch(2, 1)
+        
+        # Add the date and time label to the top-right (row 0, column 1)
+        grid_layout.addWidget(self.date_time_label, 0, 1, alignment=Qt.AlignRight | Qt.AlignTop)
+        
+        grid_layout.addWidget(self.access_granted_label, 1, 0, 1, 2, alignment=Qt.AlignCenter)
+        
+        central_widget.setLayout(grid_layout)
         self.setCentralWidget(central_widget)
         
         # Set up a timer to update the date and time every second
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_date_time)
         self.timer.start(1000)	# Update every second
-        
-        # Label for Access Granted
-        self.access_granted_label = QLabel("Access Granted", self)
-        self.access_granted_label.setStyleSheet("color: yellow; font-size: 40px;")
-        self.access_granted_label.setAlignment(Qt.AlignCenter)        
-        layout = QVBoxLayout()
-        layout.addWidget(self.access_granted_label, alignment=Qt.AlignCenter)
         
         # Initialize the date and time display
         self.update_date_time()
