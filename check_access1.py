@@ -93,7 +93,7 @@ class access_granted(QMainWindow):
                     cursor.execute("""
                         INSERT INTO unauth_logs (rfid_id, attempt_time, status, attempt_details, photo)
                         VALUES (?, ?, ?, ?, ?)
-                    """, (rfid_str, attempt_time, status, attempt_details, photo))
+                    """, (str(id), attempt_time, status, attempt_details, photo))
 
                     conn.commit()
                     self.access_granted_label.setText("ACCESS DENIED")
