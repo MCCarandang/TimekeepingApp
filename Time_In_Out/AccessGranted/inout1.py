@@ -1,5 +1,6 @@
 # This code implements Time in and Time Out for Access Granted
 # This code is working properly
+# Time in and out is not properly aligned with the database line 100 tp 123
 
 import RPi.GPIO as GPIO
 from mfrc522 import SimpleMFRC522
