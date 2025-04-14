@@ -73,7 +73,7 @@ class access_granted(QMainWindow):
         self.date_time_label.setText(f"<div>{date_str}</div><div>{time_str}</div>")
     
     def check_rfid(self):
-        try:
+        try: 
             id, text = self.reader.read_no_block()
         
             if id:
