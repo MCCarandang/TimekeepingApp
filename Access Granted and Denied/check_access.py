@@ -74,19 +74,33 @@ class access_granted(QMainWindow):
             id, text = self.reader.read_no_block()
             
             if id:
+                rfid_str = str(id)
                 conn = sqlite3.connect('/home/raspberrypi/Desktop/TimekeepingApp/timekeeping_app.db')
                 cursor = conn.cursor()
+                
                 cursor.execute("SELECT * FROM emp_profiles WHERE rfid_id = ?", (str(id),))
                 result = cursor.fetchone()
-                conn.close()
                 
                 if result:
                     self.access_granted_label.setText("ACCESS GRANTED")
                 
                 else:
+                    # Access Denied - log to unauth_logs (meaning pag may nagtap na unauth rfid tag marerecord na to sa db)
+                    attempt_time = time.strftime("%Y-%m-%d %H:%M:%S")
+                    status = "Access Denied"
+                    attempt_details = "RFID not found in emp_profiles"
+                    photo = "none"
+                    
+                    cursor.execute("""
+                        INSERT INTO unauth_logs (rfid_id, attempt_time, status, attempt_details, photo)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (str(id), attempt_time, status, attempt_details, photo))
+                    conn.commit()
+                    
                     self.access_granted_label.setText("ACCESS DENIED")
-                
-                
+                    
+                conn.close()
+                  
             # Reset label after 3 seconds
             QTimer.singleShot(3000, lambda: self.access_granted_label.setText("TAP YOUR RFID TAG"))
                               
