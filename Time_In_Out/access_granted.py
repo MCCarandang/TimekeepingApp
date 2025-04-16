@@ -2,144 +2,184 @@ import RPi.GPIO as GPIO
 from mfrc522 import SimpleMFRC522
 import sqlite3
 import time
-from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QGridLayout, QWidget
+from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget
 from PyQt5.QtGui import QPalette, QColor, QFont
 from PyQt5.QtCore import Qt, QTimer, QDateTime
 import sys
 
-class access_granted(QMainWindow):
-    
+
+class AccessGrantedWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Timekeeping")
-        self.showFullScreen()	# Launch in full screen
-        
-        # Set background color to black
-        palette = QPalette()
-        palette.setColor(QPalette.Window, QColor(Qt.black))
+        self.showFullScreen()
+
+        # Set background color to navy
         self.setAutoFillBackground(True)
+        palette = QPalette()
+        palette.setColor(QPalette.Window, QColor("navy"))
         self.setPalette(palette)
         
-        # Create a label for date and time
-        self.date_time_label = QLabel(self)
-        self.date_time_label.setStyleSheet("color: yellow; font-size: 20px;")
-        self.date_time_label.setAlignment(Qt.AlignRight | Qt.AlignTop)
+        # Create a QWidget as the container
+        self.label_group = QWidget()
         
-        # Label for Access Granted
-        self.access_granted_label = QLabel("TAP YOUR RFID TAG", self)
-        self.access_granted_label.setStyleSheet("color: yellow; font-size: 40px;")
+        # Create the labels
+        self.date_time_label = QLabel()
+        self.transaction_code_label = QLabel("IN")
+        self.access_granted_label = QLabel("TAP YOUR RFID TAG")
+        
+        # Set fonts and styles
+        self.date_time_label.setFont(QFont("Helvetica", 15))
+        self.date_time_label.setStyleSheet("color: white;")
+        self.date_time_label.setAlignment(Qt.AlignRight | Qt.AlignTop)
+
+        self.transaction_code_label.setFont(QFont("Helvetica", 45, QFont.Bold))
+        self.transaction_code_label.setStyleSheet("color: white;")
+        self.transaction_code_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+
+        self.access_granted_label.setFont(QFont("Helvetica", 45, QFont.Bold))
+        self.access_granted_label.setStyleSheet("color: white;")
         self.access_granted_label.setAlignment(Qt.AlignCenter)
         
-        # Create a central widget and layout
-        central_widget = QWidget(self)
-        grid_layout = QGridLayout()
-        
-        # Adjust Spacing
-        grid_layout.setContentsMargins(20, 20, 20, 20)
-        grid_layout.setRowStretch(0, 1)
-        grid_layout.setRowStretch(1, 2)
-        grid_layout.setRowStretch(2, 1)
-        # Add the date and time label to the top-right (row 0, column 1)
-        grid_layout.addWidget(self.date_time_label, 0, 1, alignment=Qt.AlignRight | Qt.AlignTop)
-        
-        grid_layout.addWidget(self.access_granted_label, 1, 0, 1, 2, alignment=Qt.AlignCenter)
-        
-        central_widget.setLayout(grid_layout)
+        # Create layout and add Widgets
+        label_layout = QVBoxLayout(self.label_group)
+        label_layout.setContentsMargins(15, 15, 15, 15)
+        label_layout.addWidget(self.date_time_label)
+        label_layout.addWidget(self.transaction_code_label)
+        label_layout.addWidget(self.access_granted_label)
+        label_layout.addStretch(1)
+
+        central_widget = QWidget()
+        central_widget.setLayout(label_layout)
         self.setCentralWidget(central_widget)
-        
-        # Set up a timer to update the date and time every second
+
+        # Create a horizontal layout for user info such as Name, ID number, and photo
+        user_info_layout = QVBoxLayout()
+
+        # Create a vertical layout for the user's name and ID number
+        name_id_layout = QVBoxLayout()
+
+        # Create the labels for user info
+        self.user_name_label = QLabel("")
+        self.id_number_label = QLabel("")
+
+        # Set fonts and styles for user info
+        font = QFont("Helvetica", 25, QFont.Bold)
+        self.user_name_label.setFont(font)
+        self.id_number_label.setFont(font)
+        self.user_name_label.setStyleSheet("color: gray;")
+        self.id_number_label.setStyleSheet("color: yellow;")
+
+        # Add user name and ID number labels to the name_id_layout
+        name_id_layout.addWidget(self.user_name_label)
+        name_id_layout.addWidget(self.id_number_label)
+
+        # Set alignment of user's name and ID number labels to center
+        self.user_name_label.setAlignment(Qt.AlignCenter)
+        self.id_number_label.setAlignment(Qt.AlignCenter)
+
+        # Create the user's photo label
+        self.photo_label = QLabel()
+
+        # Add the name_id_layout and photo_label to the user_info_layout
+        user_info_layout.addLayout(name_id_layout)
+        user_info_layout.addWidget(self.photo_label)
+
+        # Set alignment of user photo label to leftside of ID number and username
+        self.photo_label.setAlignment(Qt.AlignCenter)
+
+        # Timers
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_date_time)
-        self.timer.start(1000)	# Update every second
+        self.timer.start(1000)
         self.update_date_time()
-        
+
         self.rfid_timer = QTimer(self)
         self.rfid_timer.timeout.connect(self.check_rfid)
-        self.rfid_timer.start(500)	# Check for RFID every 0.5 seconds
-        
-        # RFID reader
+        self.rfid_timer.start(500)
+
+        # RFID Setup
         GPIO.setwarnings(False)
         self.reader = SimpleMFRC522()
 
-        
     def update_date_time(self):
         current_time = QDateTime.currentDateTime()
         date_str = current_time.toString("MM-dd-yyyy")
         time_str = current_time.toString("HH:mm:ss")
-        self.date_time_label.setText(f"<div>{date_str}</div><div>{time_str}</div>")
-    
+        self.date_time_label.setText(f"{date_str}\n{time_str}")
+
     def check_rfid(self):
         try:
-            id, text = self.reader.read_no_block()
-    
+            id, _ = self.reader.read_no_block()
+
             if id:
                 rfid_str = str(id)
                 conn = sqlite3.connect('/home/raspberrypi/Desktop/Timekeeping/timekeepingapp.db')
                 cursor = conn.cursor()
-    
+
                 cursor.execute("SELECT id FROM employees WHERE rfid_tag = ?", (rfid_str,))
                 result = cursor.fetchone()
-    
+
                 current_time = time.strftime("%Y-%m-%d %H:%M:%S")
-    
+
                 if result:
                     employee_id = result[0]
-    
-                    # Check if user already timed in without timeout
+
                     cursor.execute("""
                         SELECT time_in FROM attd_logs
                         WHERE employee_id = ? AND status = 'IN' AND time_out IS NULL
                         ORDER BY transaction_time DESC LIMIT 1
                     """, (employee_id,))
                     last_in = cursor.fetchone()
-    
+
                     if last_in:
-                        # Check if 3 mins have passed
                         last_in_time = time.strptime(last_in[0], "%Y-%m-%d %H:%M:%S")
                         now = time.localtime()
                         diff = time.mktime(now) - time.mktime(last_in_time)
-                        
+
                         if diff >= 180:
                             cursor.execute("""
                                 UPDATE attd_logs
                                 SET time_out = ?, status = 'OUT'
-                                WHERE emp_id = ? AND status = 'IN' AND time_out IS NULL
+                                WHERE employee_id = ? AND status = 'IN' AND time_out IS NULL
                             """, (current_time, employee_id))
-                            self.access_granted_label.setText("TIME OUT")
+                            self.access_granted_label.setText("ACCESS GRANTED")
+                            self.transaction_code_label.setText("OUT")
                         else:
                             self.access_granted_label.setText("ALREADY TIMED IN")
+                            self.transaction_code_label.setText("IN")
                     else:
                         cursor.execute("""
                             INSERT INTO attd_logs (employee_id, time_in, status, transaction_time)
                             VALUES (?, ?, 'IN', ?)
                         """, (employee_id, current_time, current_time))
-                        self.access_granted_label.setText("TIME IN")
-                        
+                        self.access_granted_label.setText("ACCESS GRANTED")
+                        self.transaction_code_label.setText("IN")
                 else:
-                    attempt_time = time.strftime("%Y-%m-%d %H:%M:%S")
-                    transaction_code = None
-                    # Unauthorized scan
+                    attempt_time = current_time
                     cursor.execute("""
                         INSERT INTO denied_usr (rfid_tag, transaction_code, attempt_time)
-                        VALUES (?, ?, ?)
-                    """, (rfid_str, transaction_code, attempt_time))
+                        VALUES (?, NULL, ?)
+                    """, (rfid_str, attempt_time))
                     self.access_granted_label.setText("ACCESS DENIED")
-    
+                    self.transaction_code_label.setText("IN")
+
                 conn.commit()
                 conn.close()
-    
-                # Reset display
+
                 QTimer.singleShot(3000, lambda: self.access_granted_label.setText("TAP YOUR RFID TAG"))
-    
+                QTimer.singleShot(3000, lambda: self.transaction_code_label.setText("IN"))
+
         except Exception as e:
             print(f"Error reading RFID: {e}")
-    
+
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
             self.showNormal()
-        
+
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = access_granted()
+    window = AccessGrantedWindow()
     window.show()
     sys.exit(app.exec_())
