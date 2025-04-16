@@ -1,14 +1,10 @@
-# This code implements Time in and Time Out for Access Denied
-# This code is working properly
-# Time in and out is not properly aligned with the database line 100 tp 123
-
 import RPi.GPIO as GPIO
 from mfrc522 import SimpleMFRC522
 import sqlite3
 import time
 from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QGridLayout, QWidget
-from PyQt5.QtGui import QPalette, QColor
 from PyQt5.QtCore import Qt, QTimer, QDateTime
+from PyQt5.QtGui import QPalette, QColor
 import sys
 
 class access_granted(QMainWindow):
@@ -20,18 +16,20 @@ class access_granted(QMainWindow):
         
         # Set background color to black
         palette = QPalette()
-        palette.setColor(QPalette.Window, QColor(Qt.black))
+        palette.setColor(QPalette.Window, QColor("navy"))
         self.setAutoFillBackground(True)
         self.setPalette(palette)
         
         # Create a label for date and time
         self.date_time_label = QLabel(self)
-        self.date_time_label.setStyleSheet(font=("Helvetica", 16, "bold"))
+        self.date_time_label.setQFont(QFont("Helvetica", 15))
+        self.date_time_label.setStyleSheet("color: white;")
         self.date_time_label.setAlignment(Qt.AlignRight | Qt.AlignTop)
         
         # Label for Access Granted
         self.access_granted_label = QLabel("TAP YOUR RFID TAG", self)
-        self.access_granted_label.setStyleSheet("color: yellow; font-size: 40px;")
+        self.access_granted_label.setQFont(QFont("Helvetica", 15, QFont.Bold))
+        self.access_granted_label.setStyleSheet("color: white;")
         self.access_granted_label.setAlignment(Qt.AlignCenter)
         
         # Create a central widget and layout
@@ -73,108 +71,70 @@ class access_granted(QMainWindow):
         self.date_time_label.setText(f"<div>{date_str}</div><div>{time_str}</div>")
     
     def check_rfid(self):
-        try: 
+        try:
             id, text = self.reader.read_no_block()
-        
+    
             if id:
                 rfid_str = str(id)
-                conn = sqlite3.connect('/home/raspberrypi/Desktop/TimekeepingApp/timekeeping_app.db')
+                conn = sqlite3.connect('/home/raspberrypi/Desktop/Timekeeping/timekeepingapp.db')
                 cursor = conn.cursor()
-            
-                # Check if the scanned RFID is in the emp_profiles table
-                cursor.execute("SELECT * FROM emp_profiles WHERE rfid_id = ?", (rfid_str,))
+    
+                cursor.execute("SELECT id FROM employees WHERE rfid_tag = ?", (rfid_str,))
                 result = cursor.fetchone()
-
+    
+                current_time = time.strftime("%Y-%m-%d %H:%M:%S")
+    
                 if result:
-                    emp_id = result[0]
-                    current_time = time.strftime("%Y-%m-%d %H:%M:%S")
-
-                    # Check the last IN record (with no time_out yet)
+                    employee_id = result[0]
+    
+                    # Check if user already timed in without timeout
                     cursor.execute("""
                         SELECT time_in FROM attd_logs
-                        WHERE emp_id = ? AND status = 'IN' AND time_out IS NULL
-                        ORDER BY created_at DESC LIMIT 1
-                    """, (emp_id,))
+                        WHERE employee_id = ? AND status = 'IN' AND time_out IS NULL
+                        ORDER BY transaction_time DESC LIMIT 1
+                    """, (employee_id,))
                     last_in = cursor.fetchone()
-
+    
                     if last_in:
-                        # Check if 3 minutes have passed since time_in
+                        # Check if 3 mins have passed
                         last_in_time = time.strptime(last_in[0], "%Y-%m-%d %H:%M:%S")
                         now = time.localtime()
                         diff = time.mktime(now) - time.mktime(last_in_time)
-
-                        if diff >= 180:  # 3 minutes = 180 seconds
-                            # Allow TIME OUT
+                        
+                        if diff >= 180:
                             cursor.execute("""
                                 UPDATE attd_logs
                                 SET time_out = ?, status = 'OUT'
-                                WHERE emp_id = ? AND status = 'IN' AND time_out IS NULL
-                            """, (current_time, emp_id))
+                                WHERE employee_id = ? AND status = 'IN' AND time_out IS NULL
+                            """, (current_time, employee_id))
                             self.access_granted_label.setText("TIME OUT")
                         else:
-                            # Too early to TIME OUT
                             self.access_granted_label.setText("ALREADY TIMED IN")
                     else:
-                        # No active IN, so allow TIME IN
                         cursor.execute("""
-                            INSERT INTO attd_logs (emp_id, time_in, status, created_at)
+                            INSERT INTO attd_logs (employee_id, time_in, status, transaction_time)
                             VALUES (?, ?, 'IN', ?)
-                        """, (emp_id, current_time, current_time))
+                        """, (employee_id, current_time, current_time))
                         self.access_granted_label.setText("TIME IN")
-            
+                        
                 else:
-                    # Access Denied: Check last attempt type
                     attempt_time = time.strftime("%Y-%m-%d %H:%M:%S")
-                    status = "Access Denied"
-                    attempt_details = "RFID not found in emp_profiles"
-                    photo = "none"
-
-                    # Check for last IN attempt without matching OUT
+                    transaction_code = None
+                    # Unauthorized scan
                     cursor.execute("""
-                        SELECT id, attempt_time FROM unauth_logs
-                        WHERE rfid_id = ? AND status = 'Access Denied' AND attempt_type = 'IN'
-                        ORDER BY attempt_time DESC LIMIT 1
-                    """, (rfid_str,))
-                    last_unauth_in = cursor.fetchone()
-
-                    if last_unauth_in:
-                        # Check if already timed OUT
-                        cursor.execute("""
-                            SELECT * FROM unauth_logs
-                            WHERE rfid_id = ? AND status = 'Access Denied' AND attempt_type = 'OUT'
-                            AND attempt_time > ?    
-                            ORDER BY attempt_time DESC LIMIT 1
-                        """, (rfid_str, last_unauth_in[1]))
-                        last_unauth_out = cursor.fetchone()
-
-                        if not last_unauth_out:
-                            # TIME OUT entry
-                            cursor.execute("""
-                                INSERT INTO unauth_logs (rfid_id, attempt_time, status, attempt_details, photo, attempt_type)
-                                VALUES (?, ?, ?, ?, ?, 'OUT')
-                            """, (rfid_str, attempt_time, status, "Repeated access denied - TIME OUT", photo))
-                            self.access_granted_label.setText("ACCESS DENIED - TIME OUT")
-                        else:
-                            # Already timed out
-                            self.access_granted_label.setText("DENIED - ALREADY TIMED OUT")
-                    else:
-                        # First-time Access Denied - TIME IN
-                        cursor.execute("""
-                            INSERT INTO unauth_logs (rfid_id, attempt_time, status, attempt_details, photo, attempt_type)
-                            VALUES (?, ?, ?, ?, ?, 'IN')
-                        """, (rfid_str, attempt_time, status, attempt_details, photo))
-                        self.access_granted_label.setText("ACCESS DENIED - TIME IN")
-
-
-                    conn.commit()
-                    conn.close()
-            
-                # Reset label after 3 seconds
+                        INSERT INTO denied_usr (rfid_tag, transaction_code, attempt_time)
+                        VALUES (?, ?, ?)
+                    """, (rfid_str, transaction_code, attempt_time))
+                    self.access_granted_label.setText("ACCESS DENIED")
+    
+                conn.commit()
+                conn.close()
+    
+                # Reset display
                 QTimer.singleShot(3000, lambda: self.access_granted_label.setText("TAP YOUR RFID TAG"))
-                              
+    
         except Exception as e:
             print(f"Error reading RFID: {e}")
-
     
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
