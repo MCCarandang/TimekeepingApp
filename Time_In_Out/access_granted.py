@@ -1,6 +1,8 @@
 import RPi.GPIO as GPIO
 from mfrc522 import SimpleMFRC522
 import sqlite3
+import os
+from PyQt5.QtGui import QPixmap
 import time
 from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget
 from PyQt5.QtGui import QPalette, QColor, QFont
@@ -155,6 +157,30 @@ class AccessGrantedWindow(QMainWindow):
                         """, (employee_id, current_time, current_time))
                         self.access_granted_label.setText("ACCESS GRANTED")
                         self.transaction_code_label.setText("IN")
+
+                    # Fetch user info
+                    cursor.execute("""
+                        SELECT first_name, middle_name, last_name, rfid_tag, photo
+                        FROM employees WHERE id = ?
+                    """, (employee_id,))
+                    emp_info = cursor.fetchone()
+
+                    if emp_info:
+                        full_name = f"{emp_info[0]} {emp_info[1]} {emp_info[2]}"
+                        rfid_tag = emp_info[3]
+                        photo_path = emp_info[4]
+
+                        self.user_name_label.setText(full_name)
+                        self.id_number_label.setText(f"ID: {rfid_tag}")
+
+                        # Load and set user photo
+                        if photo_path:
+                            pixmap = QPixmap(photo_path)
+                            if not pixmap.isNull():
+                                self.photo_label.setPixmap(pixmap.scaled(200, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                            else:
+                                self.photo_label.setText("Photo not found")
+
                 else:
                     attempt_time = current_time
                     cursor.execute("""
