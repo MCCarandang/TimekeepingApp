@@ -7,6 +7,7 @@ import time
 from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget
 from PyQt5.QtGui import QPalette, QColor, QFont
 from PyQt5.QtCore import Qt, QTimer, QDateTime
+from PyQt5.QtGui import QPixmap
 import sys
 
 
