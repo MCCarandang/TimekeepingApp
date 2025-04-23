@@ -3,12 +3,13 @@ import time
 import os
 import sqlite3
 import RPi.GPIO as GPIO
-from access_granted_rebuild import get_label_from_code
 from mfrc522 import SimpleMFRC522
 from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget
 from PyQt5.QtGui import QPalette, QColor, QFont, QPixmap
 from PyQt5.QtCore import Qt, QTimer, QDateTime
 
+def get_label_from_code(code):
+        return "IN" if code == 'I' else "OUT"
 
 class AccessGrantedWindow(QMainWindow):
     def __init__(self):
@@ -117,9 +118,6 @@ class AccessGrantedWindow(QMainWindow):
         self.id_number_label.setText("")
         self.photo_label.clear()
 
-    def get_label_from_code(self, code):
-        return "IN" if code == 'I' else "OUT"
-
     def check_rfid(self):
         try:
             id, _ = self.reader.read_no_block()
@@ -133,75 +131,73 @@ class AccessGrantedWindow(QMainWindow):
 
                 current_time = time.strftime("%Y-%m-%d %H:%M:%S")
 
-                # --- Repeated Scan Check ---
-                cursor.execute("""
-                    SELECT scan_time FROM repeated_scans
-                    WHERE rfid_tag = ?
-                    ORDER BY scan_time DESC LIMIT 1
-                """, (rfid_str,))
-                last_scan = cursor.fetchone()
-
-                if last_scan:
-                    last_scan_time = time.strptime(last_scan[0], "%Y-%m-%d %H:%M:%S")
-                    now = time.localtime()
-                    diff_seconds = time.mktime(now) - time.mktime(last_scan_time)
-
-                    if diff_seconds < 10:
-                        # Ignore scan
-                        conn.close()
-                        return
-                    else:
-                        # Update scan record
-                        cursor.execute("""
-                            UPDATE repeated_scans
-                            SET scan_time = ?, scan_count = scan_count + 1
-                            WHERE rfid_tag = ?
-                        """, (current_time, rfid_str))
-                else:
-                    # First time scan entry
-                    cursor.execute("""
-                        INSERT INTO repeated_scans (rfid_tag, transaction_code, scan_time)
-                        VALUES (?, 'I', ?)
-                    """, (rfid_str, current_time))
-                # --- End Repeated Scan Check ---
-
+                # Check if RFID is authorized
                 cursor.execute("SELECT id FROM employees WHERE rfid_tag = ?", (rfid_str,))
                 result = cursor.fetchone()
 
                 if result:
                     employee_id = result[0]
-
+                
+                    # Check if this is a clock-out or clock-in
                     cursor.execute(""" 
                         SELECT time_in FROM attd_logs 
                         WHERE employee_id = ? AND transaction_code = 'I' AND time_out IS NULL 
                         ORDER BY transaction_time DESC LIMIT 1 
                     """, (employee_id,))
                     last_in = cursor.fetchone()
-
+                
                     if last_in:
-                        last_in_time = time.strptime(last_in[0], "%Y-%m-%d %H:%M:%S")
-                        now = time.localtime()
-                        diff = time.mktime(now) - time.mktime(last_in_time)
-
-                        if diff >= 60:
-                            cursor.execute(""" 
-                                UPDATE attd_logs 
-                                SET time_out = ?
-                                WHERE employee_id = ? AND transaction_code = 'I' AND time_out IS NULL 
-                            """, (current_time, employee_id))
-                            self.access_granted_label.setText("ACCESS GRANTED")
-                            self.transaction_code_label.setText(get_label_from_code('O'))
-                        else:
-                            self.access_granted_label.setText("ALREADY TIMED IN")
-                            self.transaction_code_label.setText(get_label_from_code('I'))
-                    else:
+                        # CLOCK-OUT: No repeated scan check
                         cursor.execute(""" 
-                            INSERT INTO attd_logs (employee_id, time_in, transaction_code, transaction_time) 
-                            VALUES (?, ?, 'I', ?) 
-                        """, (employee_id, current_time, current_time))
+                            UPDATE attd_logs 
+                            SET time_out = ? 
+                            WHERE employee_id = ? AND transaction_code = 'I' AND time_out IS NULL 
+                        """, (current_time, employee_id))
+                        self.access_granted_label.setText("ACCESS GRANTED")
+                        self.transaction_code_label.setText(get_label_from_code('O'))
+                
+                    else:
+                        # CLOCK-IN: Check for repeated scan
+                        cursor.execute("""
+                            SELECT scan_time FROM repeated_scans
+                            WHERE rfid_tag = ?
+                            ORDER BY scan_time DESC LIMIT 1
+                        """, (rfid_str,))
+                        last_scan = cursor.fetchone()
+                
+                        if last_scan:
+                            last_scan_time = time.strptime(last_scan[0], "%Y-%m-%d %H:%M:%S")
+                            now = time.localtime()
+                            diff_seconds = time.mktime(now) - time.mktime(last_scan_time)
+                
+                            if diff_seconds < 3:
+                                self.access_granted_label.setText("REPEATED ACTION")
+                                conn.close()
+                                QTimer.singleShot(3000, self.reset_ui)
+                                return
+                            else:
+                                cursor.execute("""
+                                    UPDATE repeated_scans
+                                    SET scan_time = ?, scan_count = scan_count + 1
+                                    WHERE rfid_tag = ?
+                                """, (current_time, rfid_str))
+                        else:
+                            cursor.execute("""
+                                INSERT INTO repeated_scans (rfid_tag, transaction_code, scan_time)
+                                VALUES (?, 'I', ?)
+                            """, (rfid_str, current_time))
+                
+                        # Now proceed with CLOCK-IN
+                        cursor.execute("""
+                            INSERT INTO attd_logs (employee_id, rfid_tag, transaction_code, time_in, transaction_time)
+                            VALUES (?, ?, 'I', ?, ?)
+                        """, (employee_id, rfid_str, current_time, current_time))
                         self.access_granted_label.setText("ACCESS GRANTED")
                         self.transaction_code_label.setText(get_label_from_code('I'))
 
+
+
+                    # Display user info
                     cursor.execute(""" 
                         SELECT first_name, middle_name, last_name, rfid_tag, photo 
                         FROM employees WHERE id = ? 
@@ -224,6 +220,7 @@ class AccessGrantedWindow(QMainWindow):
                                 self.photo_label.setText("Photo not found")
 
                 else:
+                    # UNAUTHORIZED: No repeated scan logic
                     cursor.execute(""" 
                         SELECT transaction_code FROM denied_usr 
                         WHERE rfid_tag = ? ORDER BY attempt_time DESC LIMIT 1 
@@ -238,16 +235,18 @@ class AccessGrantedWindow(QMainWindow):
                             WHERE rfid_tag = ?
                         """, (new_transaction_code, current_time, rfid_str))
                     else:
+                        new_transaction_code = 'I'
                         cursor.execute(""" 
                             INSERT INTO denied_usr (rfid_tag, transaction_code, attempt_time) 
-                            VALUES (?, 'I', ?) 
-                        """, (rfid_str, current_time))
+                            VALUES (?, ?, ?) 
+                        """, (rfid_str, new_transaction_code, current_time))
 
                     self.access_granted_label.setText("ACCESS DENIED")
-                    self.transaction_code_label.setText("I" if last_denied is None else new_transaction_code)
+                    self.transaction_code_label.setText(get_label_from_code(new_transaction_code))
 
                 conn.commit()
                 conn.close()
+
                 QTimer.singleShot(3000, self.reset_ui)
 
         except Exception as e:

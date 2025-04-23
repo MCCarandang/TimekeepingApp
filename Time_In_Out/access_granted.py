@@ -1,3 +1,5 @@
+# Working Access Granted and Denied with Time In/Out
+# With ALREADY TIMED IN feature
 import sys
 import time
 import os
@@ -121,8 +123,6 @@ class AccessGrantedWindow(QMainWindow):
     def check_rfid(self):
         try:
             id, _ = self.reader.read_no_block()
-            transaction_code = 'O'
-            transaction_code = 'I'
     
             if id:
                 rfid_str = str(id)
@@ -154,7 +154,7 @@ class AccessGrantedWindow(QMainWindow):
                         if diff >= 10:
                             cursor.execute(""" 
                                 UPDATE attd_logs 
-                                SET time_out = ?, 
+                                SET time_out = ? 
                                 WHERE employee_id = ? AND transaction_code = 'I' AND time_out IS NULL 
                             """, (current_time, employee_id))
                             self.access_granted_label.setText("ACCESS GRANTED")
@@ -202,23 +202,14 @@ class AccessGrantedWindow(QMainWindow):
                     """, (rfid_str,))
                     last_denied = cursor.fetchone()
     
-                    if last_denied:
-                        # Toggle between IN and OUT for denied access
-                        new_transaction_code = 'O' if last_denied[0] == 'I' else 'I'
-                        cursor.execute(""" 
-                            UPDATE denied_usr 
-                            SET transaction_code = ?, attempt_time = ? 
-                            WHERE rfid_tag = ?
-                        """, (new_transaction_code, current_time, rfid_str))
-                    else:
-                        # First denied attempt for this RFID tag
-                        cursor.execute(""" 
-                            INSERT INTO denied_usr (rfid_tag, transaction_code, attempt_time) 
-                            VALUES (?, 'I', ?) 
-                        """, (rfid_str, current_time))
-    
+                    new_transaction_code = 'O' if last_denied and last_denied[0] == 'I' else 'I'
+                    cursor.execute(""" 
+                        INSERT INTO denied_usr (rfid_tag, transaction_code, time_in, transaction_code, time_out, attempt_time) 
+                        VALUES (?, ?, ?, ?, ?, ?) 
+                    """, (rfid_str, new_transaction_code, current_time, new_transaction_code, current_time, current_time))
+
                     self.access_granted_label.setText("ACCESS DENIED")
-                    self.transaction_code_label.setText("IN" if last_denied is None else new_transaction_code)
+                    self.transaction_code_label.setText(get_label_from_code(new_transaction_code))
     
                 conn.commit()
                 conn.close()
