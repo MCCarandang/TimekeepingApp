@@ -8,6 +8,8 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QWid
 from PyQt5.QtGui import QPalette, QColor, QFont, QPixmap
 from PyQt5.QtCore import Qt, QTimer, QDateTime
 
+def get_label_from_code(code):
+        return "IN" if code == 'I' else "OUT"
 
 class AccessGrantedWindow(QMainWindow):
     def __init__(self):
@@ -119,6 +121,8 @@ class AccessGrantedWindow(QMainWindow):
     def check_rfid(self):
         try:
             id, _ = self.reader.read_no_block()
+            transaction_code = 'O'
+            transaction_code = 'I'
     
             if id:
                 rfid_str = str(id)
@@ -136,7 +140,7 @@ class AccessGrantedWindow(QMainWindow):
                     # Check if the user is already timed in without timeout
                     cursor.execute(""" 
                         SELECT time_in FROM attd_logs 
-                        WHERE employee_id = ? AND transaction_code = 'IN' AND time_out IS NULL 
+                        WHERE employee_id = ? AND transaction_code = 'I' AND time_out IS NULL 
                         ORDER BY transaction_time DESC LIMIT 1 
                     """, (employee_id,))
                     last_in = cursor.fetchone()
@@ -147,24 +151,25 @@ class AccessGrantedWindow(QMainWindow):
                         now = time.localtime()
                         diff = time.mktime(now) - time.mktime(last_in_time)
     
-                        if diff >= 180:
+                        if diff >= 10:
                             cursor.execute(""" 
                                 UPDATE attd_logs 
-                                SET time_out = ?, status = 'OUT' 
-                                WHERE employee_id = ? AND transaction_code = 'IN' AND time_out IS NULL 
+                                SET time_out = ?, 
+                                WHERE employee_id = ? AND transaction_code = 'I' AND time_out IS NULL 
                             """, (current_time, employee_id))
                             self.access_granted_label.setText("ACCESS GRANTED")
-                            self.transaction_code_label.setText("OUT")
+                            self.transaction_code_label.setText(get_label_from_code('O'))
+
                         else:
                             self.access_granted_label.setText("ALREADY TIMED IN")
-                            self.transaction_code_label.setText("IN")
+                            self.transaction_code_label.setText(get_label_from_code('I'))
                     else:
                         cursor.execute(""" 
                             INSERT INTO attd_logs (employee_id, time_in, transaction_code, transaction_time) 
-                            VALUES (?, ?, 'IN', ?) 
+                            VALUES (?, ?, 'I', ?) 
                         """, (employee_id, current_time, current_time))
                         self.access_granted_label.setText("ACCESS GRANTED")
-                        self.transaction_code_label.setText("IN")
+                        self.transaction_code_label.setText(get_label_from_code('I'))
     
                     # Fetch user info
                     cursor.execute(""" 
@@ -199,7 +204,7 @@ class AccessGrantedWindow(QMainWindow):
     
                     if last_denied:
                         # Toggle between IN and OUT for denied access
-                        new_transaction_code = 'OUT' if last_denied[0] == 'IN' else 'IN'
+                        new_transaction_code = 'O' if last_denied[0] == 'I' else 'I'
                         cursor.execute(""" 
                             UPDATE denied_usr 
                             SET transaction_code = ?, attempt_time = ? 
@@ -209,7 +214,7 @@ class AccessGrantedWindow(QMainWindow):
                         # First denied attempt for this RFID tag
                         cursor.execute(""" 
                             INSERT INTO denied_usr (rfid_tag, transaction_code, attempt_time) 
-                            VALUES (?, 'IN', ?) 
+                            VALUES (?, 'I', ?) 
                         """, (rfid_str, current_time))
     
                     self.access_granted_label.setText("ACCESS DENIED")
@@ -218,8 +223,8 @@ class AccessGrantedWindow(QMainWindow):
                 conn.commit()
                 conn.close()
     
-                #QTimer.singleShot(3000, lambda: self.access_granted_label.setText("TAP YOUR RFID TAG"))
-                #QTimer.singleShot(3000, lambda: self.transaction_code_label.setText("IN"))
+                # QTimer.singleShot(3000, lambda: self.access_granted_label.setText("TAP YOUR RFID TAG"))
+                # QTimer.singleShot(3000, lambda: self.transaction_code_label.setText("IN"))
                 QTimer.singleShot(3000, self.reset_ui)
     
         except Exception as e:
