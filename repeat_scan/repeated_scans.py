@@ -137,17 +137,47 @@ class AccessGrantedWindow(QMainWindow):
 
                 if result:
                     employee_id = result[0]
-                
-                    # Check if this is a clock-out or clock-in
+
+                    # Check for repeated scan FIRST
+                    cursor.execute("""
+                        SELECT scan_time FROM repeated_scans
+                        WHERE rfid_tag = ?
+                        ORDER BY scan_time DESC LIMIT 1
+                    """, (rfid_str,))
+                    last_scan = cursor.fetchone()
+
+                    if last_scan:
+                        last_scan_time = time.strptime(last_scan[0], "%Y-%m-%d %H:%M:%S")
+                        now = time.localtime()
+                        diff_seconds = time.mktime(now) - time.mktime(last_scan_time)
+
+                        if diff_seconds < 3:
+                            self.access_granted_label.setText("REPEATED ACTION")
+                            conn.close()
+                            QTimer.singleShot(3000, self.reset_ui)
+                            return
+                        else:
+                            cursor.execute("""
+                                UPDATE repeated_scans
+                                SET scan_time = ?, scan_count = scan_count + 1
+                                WHERE rfid_tag = ?
+                            """, (current_time, rfid_str))
+                    else:
+                        cursor.execute("""
+                            INSERT INTO repeated_scans (rfid_tag, transaction_code, scan_time)
+                            VALUES (?, 'I', ?)
+                        """, (rfid_str, current_time))
+
+                    # Now determine if it's a clock-out or clock-in
                     cursor.execute(""" 
                         SELECT time_in FROM attd_logs 
                         WHERE employee_id = ? AND transaction_code = 'I' AND time_out IS NULL 
                         ORDER BY transaction_time DESC LIMIT 1 
                     """, (employee_id,))
                     last_in = cursor.fetchone()
-                
+
                     if last_in:
-                        # CLOCK-OUT: No repeated scan check
+                        # CLOCK-OUT
                         cursor.execute(""" 
                             UPDATE attd_logs 
                             SET time_out = ? 
@@ -155,47 +185,14 @@ class AccessGrantedWindow(QMainWindow):
                         """, (current_time, employee_id))
                         self.access_granted_label.setText("ACCESS GRANTED")
                         self.transaction_code_label.setText(get_label_from_code('O'))
-                
                     else:
-                        # CLOCK-IN: Check for repeated scan
-                        cursor.execute("""
-                            SELECT scan_time FROM repeated_scans
-                            WHERE rfid_tag = ?
-                            ORDER BY scan_time DESC LIMIT 1
-                        """, (rfid_str,))
-                        last_scan = cursor.fetchone()
-                
-                        if last_scan:
-                            last_scan_time = time.strptime(last_scan[0], "%Y-%m-%d %H:%M:%S")
-                            now = time.localtime()
-                            diff_seconds = time.mktime(now) - time.mktime(last_scan_time)
-                
-                            if diff_seconds < 3:
-                                self.access_granted_label.setText("REPEATED ACTION")
-                                conn.close()
-                                QTimer.singleShot(3000, self.reset_ui)
-                                return
-                            else:
-                                cursor.execute("""
-                                    UPDATE repeated_scans
-                                    SET scan_time = ?, scan_count = scan_count + 1
-                                    WHERE rfid_tag = ?
-                                """, (current_time, rfid_str))
-                        else:
-                            cursor.execute("""
-                                INSERT INTO repeated_scans (rfid_tag, transaction_code, scan_time)
-                                VALUES (?, 'I', ?)
-                            """, (rfid_str, current_time))
-                
-                        # Now proceed with CLOCK-IN
+                        # CLOCK-IN
                         cursor.execute("""
                             INSERT INTO attd_logs (employee_id, rfid_tag, transaction_code, time_in, transaction_time)
                             VALUES (?, ?, 'I', ?, ?)
                         """, (employee_id, rfid_str, current_time, current_time))
                         self.access_granted_label.setText("ACCESS GRANTED")
                         self.transaction_code_label.setText(get_label_from_code('I'))
-
-
 
                     # Display user info
                     cursor.execute(""" 
