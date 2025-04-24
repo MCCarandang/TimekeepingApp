@@ -1,3 +1,6 @@
+# Access Granted and Denied with Time IN and OUT 
+# Added Repeated Scan feature for Access Granted Only
+
 import sys
 import time
 import os
@@ -29,7 +32,7 @@ class AccessGrantedWindow(QMainWindow):
         # Create the labels
         self.date_time_label = QLabel()
         self.transaction_code_label = QLabel("IN")
-        self.access_granted_label = QLabel("TAP YOUR RFID TAG")
+        self.message_label = QLabel("TAP YOUR RFID TAG")
         self.user_name_label = QLabel("")
         self.id_number_label = QLabel("")
         self.photo_label = QLabel()
@@ -43,9 +46,9 @@ class AccessGrantedWindow(QMainWindow):
         self.transaction_code_label.setStyleSheet("color: white;")
         self.transaction_code_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
-        self.access_granted_label.setFont(QFont("Helvetica", 45, QFont.Bold))
-        self.access_granted_label.setStyleSheet("color: white;")
-        self.access_granted_label.setAlignment(Qt.AlignCenter)
+        self.message_label.setFont(QFont("Helvetica", 45, QFont.Bold))
+        self.message_label.setStyleSheet("color: white;")
+        self.message_label.setAlignment(Qt.AlignCenter)
 
         self.user_name_label.setFont(QFont("Helvetica", 15, QFont.Bold))
         self.user_name_label.setStyleSheet("color: gray;")
@@ -62,7 +65,7 @@ class AccessGrantedWindow(QMainWindow):
         label_layout.setContentsMargins(15, 15, 15, 15)
         label_layout.addWidget(self.date_time_label)
         label_layout.addWidget(self.transaction_code_label)
-        label_layout.addWidget(self.access_granted_label)
+        label_layout.addWidget(self.message_label)
 
         # Create a vertical layout for the user's name and ID number
         name_id_layout = QVBoxLayout()
@@ -112,7 +115,7 @@ class AccessGrantedWindow(QMainWindow):
         self.date_time_label.setText(f"{date_str}\n{time_str}")
         
     def reset_ui(self):
-        self.access_granted_label.setText("TAP YOUR RFID TAG")
+        self.message_label.setText("TAP YOUR RFID TAG")
         self.transaction_code_label.setText("IN")
         self.user_name_label.setText("")
         self.id_number_label.setText("")
@@ -138,30 +141,26 @@ class AccessGrantedWindow(QMainWindow):
                 if result:
                     employee_id = result[0]
 
-                    # Check for repeated scan FIRST
+                    # Check for repeated scan within 3 seconds
                     cursor.execute("""
-                        SELECT scan_time FROM repeated_scans
-                        WHERE rfid_tag = ?
-                        ORDER BY scan_time DESC LIMIT 1
-                    """, (rfid_str,))
-                    last_scan = cursor.fetchone()
-
-                    if last_scan:
-                        last_scan_time = time.strptime(last_scan[0], "%Y-%m-%d %H:%M:%S")
+                        SELECT transaction_time FROM attd_logs
+                        WHERE employee_id = ?
+                        ORDER BY transaction_time DESC LIMIT 1
+                    """, (employee_id,))
+                    last_log = cursor.fetchone()
+                    
+                    if last_log:
+                        last_log_time = time.strptime(last_log[0], "%Y-%m-%d %H:%M:%S")
                         now = time.localtime()
-                        diff_seconds = time.mktime(now) - time.mktime(last_scan_time)
-
-                        if diff_seconds < 3:
-                            self.access_granted_label.setText("REPEATED ACTION")
-                            conn.close()
+                        diff = time.mktime(now) - time.mktime(last_log_time)
+                        
+                        if diff < 5:
+                            self.message_label.setText("REPEATED SCAN")
+                            self.transaction_code_label.setText("IN")
                             QTimer.singleShot(3000, self.reset_ui)
+                            conn.close()
                             return
-                        else:
-                            cursor.execute("""
-                                UPDATE repeated_scans
-                                SET scan_time = ?, scan_count = scan_count + 1
-                                WHERE rfid_tag = ?
-                            """, (current_time, rfid_str))
+                            
                     else:
                         cursor.execute("""
                             INSERT INTO repeated_scans (rfid_tag, transaction_code, scan_time)
@@ -183,7 +182,7 @@ class AccessGrantedWindow(QMainWindow):
                             SET time_out = ? 
                             WHERE employee_id = ? AND transaction_code = 'I' AND time_out IS NULL 
                         """, (current_time, employee_id))
-                        self.access_granted_label.setText("ACCESS GRANTED")
+                        self.message_label.setText("ACCESS GRANTED")
                         self.transaction_code_label.setText(get_label_from_code('O'))
                     else:
                         # CLOCK-IN
@@ -191,7 +190,7 @@ class AccessGrantedWindow(QMainWindow):
                             INSERT INTO attd_logs (employee_id, rfid_tag, transaction_code, time_in, transaction_time)
                             VALUES (?, ?, 'I', ?, ?)
                         """, (employee_id, rfid_str, current_time, current_time))
-                        self.access_granted_label.setText("ACCESS GRANTED")
+                        self.message_label.setText("ACCESS GRANTED")
                         self.transaction_code_label.setText(get_label_from_code('I'))
 
                     # Display user info
@@ -238,7 +237,7 @@ class AccessGrantedWindow(QMainWindow):
                             VALUES (?, ?, ?) 
                         """, (rfid_str, new_transaction_code, current_time))
 
-                    self.access_granted_label.setText("ACCESS DENIED")
+                    self.message_label.setText("ACCESS DENIED")
                     self.transaction_code_label.setText(get_label_from_code(new_transaction_code))
 
                 conn.commit()
