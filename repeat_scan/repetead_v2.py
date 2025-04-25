@@ -1,5 +1,6 @@
 # Access Granted and Denied with Time IN and OUT 
 # Added Repeated Scan feature for Access Granted
+# can display user photo
 
 import sys
 import time
@@ -7,7 +8,7 @@ import os
 import sqlite3
 import RPi.GPIO as GPIO
 from mfrc522 import SimpleMFRC522
-from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QHBoxLayout, QWidget
+from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget
 from PyQt5.QtGui import QPalette, QColor, QFont, QPixmap
 from PyQt5.QtCore import Qt, QTimer, QDateTime, QByteArray, QBuffer
 
@@ -66,26 +67,22 @@ class AccessGrantedWindow(QMainWindow):
         label_layout.addWidget(self.date_time_label)
         label_layout.addWidget(self.transaction_code_label)
         label_layout.addWidget(self.message_label)
-        
-        # Second column (User name and ID number)
+
+        # Create a vertical layout for the user's name and ID number
         name_id_layout = QVBoxLayout()
+        # Add user name and ID number labels to the name_id_layout
         name_id_layout.addWidget(self.user_name_label)
         name_id_layout.addWidget(self.id_number_label)
-        name_id_layout.setAlignment(Qt.AlignCenter)
 
-        # First column (Photo)
-        photo_layout = QVBoxLayout()
-        photo_layout.addStretch(1)
-        photo_layout.addWidget(self.photo_label, alignment=Qt.AlignLeft | Qt.AlignBottom)
+        # Add the name_id_layout after the access_granted_label
+        label_layout.addLayout(name_id_layout)
 
-        # Combine both into a horizontal layout (two columns)
-        user_info_layout = QHBoxLayout()
-        user_info_layout.addLayout(photo_layout)
-        user_info_layout.addStretch(1)
-        user_info_layout.addLayout(name_id_layout)
-        user_info_layout.addStretch(1)
+        # Create a horizontal layout for user info such as Name, ID number, and photo
+        user_info_layout = QVBoxLayout()
+        # Add the photo_label to the user_info_layout
+        user_info_layout.addWidget(self.photo_label, alignment=Qt.AlignLeft)
 
-        # Create a widget for user info and add the layout
+        # Create a widget for user info and add the user_info_layout
         self.user_info_widget = QWidget()
         self.user_info_widget.setLayout(user_info_layout)
 

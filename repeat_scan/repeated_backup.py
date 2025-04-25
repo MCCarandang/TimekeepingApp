@@ -1,5 +1,6 @@
 # Access Granted and Denied with Time IN and OUT 
 # Added Repeated Scan feature for Access Granted
+# Can't display user photo
 
 import sys
 import time
@@ -7,9 +8,9 @@ import os
 import sqlite3
 import RPi.GPIO as GPIO
 from mfrc522 import SimpleMFRC522
-from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QHBoxLayout, QWidget
+from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget
 from PyQt5.QtGui import QPalette, QColor, QFont, QPixmap
-from PyQt5.QtCore import Qt, QTimer, QDateTime, QByteArray, QBuffer
+from PyQt5.QtCore import Qt, QTimer, QDateTime
 
 def get_label_from_code(code):
         return "IN" if code == 'I' else "OUT"
@@ -58,7 +59,7 @@ class AccessGrantedWindow(QMainWindow):
         self.id_number_label.setStyleSheet("color: yellow;")
         self.id_number_label.setAlignment(Qt.AlignCenter)
 
-        self.photo_label.setAlignment(Qt.AlignLeft)
+        self.photo_label.setAlignment(Qt.AlignCenter)
 
         # Create layout and add Widgets
         label_layout = QVBoxLayout(self.label_group)
@@ -66,26 +67,22 @@ class AccessGrantedWindow(QMainWindow):
         label_layout.addWidget(self.date_time_label)
         label_layout.addWidget(self.transaction_code_label)
         label_layout.addWidget(self.message_label)
-        
-        # Second column (User name and ID number)
+
+        # Create a vertical layout for the user's name and ID number
         name_id_layout = QVBoxLayout()
+        # Add user name and ID number labels to the name_id_layout
         name_id_layout.addWidget(self.user_name_label)
         name_id_layout.addWidget(self.id_number_label)
-        name_id_layout.setAlignment(Qt.AlignCenter)
 
-        # First column (Photo)
-        photo_layout = QVBoxLayout()
-        photo_layout.addStretch(1)
-        photo_layout.addWidget(self.photo_label, alignment=Qt.AlignLeft | Qt.AlignBottom)
+        # Add the name_id_layout after the access_granted_label
+        label_layout.addLayout(name_id_layout)
 
-        # Combine both into a horizontal layout (two columns)
-        user_info_layout = QHBoxLayout()
-        user_info_layout.addLayout(photo_layout)
-        user_info_layout.addStretch(1)
-        user_info_layout.addLayout(name_id_layout)
-        user_info_layout.addStretch(1)
+        # Create a horizontal layout for user info such as Name, ID number, and photo
+        user_info_layout = QVBoxLayout()
+        # Add the photo_label to the user_info_layout
+        user_info_layout.addWidget(self.photo_label)
 
-        # Create a widget for user info and add the layout
+        # Create a widget for user info and add the user_info_layout
         self.user_info_widget = QWidget()
         self.user_info_widget.setLayout(user_info_layout)
 
@@ -148,7 +145,7 @@ class AccessGrantedWindow(QMainWindow):
                     # Check for repeated scan within 3 seconds
                     cursor.execute("""
                         SELECT transaction_time FROM attd_logs
-                        WHERE id_number = ?
+                        WHERE employee_id = ?
                         ORDER BY transaction_time DESC LIMIT 1
                     """, (employee_id,))
                     last_log = cursor.fetchone()
@@ -171,59 +168,53 @@ class AccessGrantedWindow(QMainWindow):
                             VALUES (?, 'I', ?)
                         """, (rfid_str, current_time))
 
-                    # Now determine if it's a time in or time out
+                    # Now determine if it's a clock-out or clock-in
                     cursor.execute(""" 
-                        SELECT transaction_code FROM attd_logs 
-                        WHERE id_number = ?
+                        SELECT time_in FROM attd_logs 
+                        WHERE employee_id = ? AND transaction_code = 'I' AND time_out IS NULL 
                         ORDER BY transaction_time DESC LIMIT 1 
                     """, (employee_id,))
-                    last_transaction = cursor.fetchone()
+                    last_in = cursor.fetchone()
 
-                    if last_transaction and last_transaction[0] == 'I':
-                        # IF LAST IS TIME-IN, THIS IS TIME-OUT
+                    if last_in:
+                        # CLOCK-OUT
                         cursor.execute(""" 
-                            INSERT INTO attd_logs (id_number, rfid_tag, transaction_code, transaction_time)
-                            VALUES (?, ?, 'O', ?) 
-                        """, (employee_id, rfid_str, current_time))
+                            UPDATE attd_logs 
+                            SET time_out = ? 
+                            WHERE employee_id = ? AND transaction_code = 'I' AND time_out IS NULL 
+                        """, (current_time, employee_id))
                         self.message_label.setText("ACCESS GRANTED")
                         self.transaction_code_label.setText(get_label_from_code('O'))
                     else:
-                        # IF LAST IS TIME-OUT, THIS IS TIME-IN
+                        # CLOCK-IN
                         cursor.execute("""
-                            INSERT INTO attd_logs (id_number, rfid_tag, transaction_code, transaction_time)
-                            VALUES (?, ?, 'I', ?)
-                        """, (employee_id, rfid_str, current_time))
+                            INSERT INTO attd_logs (employee_id, rfid_tag, transaction_code, time_in, transaction_time)
+                            VALUES (?, ?, 'I', ?, ?)
+                        """, (employee_id, rfid_str, current_time, current_time))
                         self.message_label.setText("ACCESS GRANTED")
                         self.transaction_code_label.setText(get_label_from_code('I'))
 
                     # Display user info
                     cursor.execute(""" 
-                        SELECT first_name, middle_name, last_name, id_number, photo 
+                        SELECT first_name, middle_name, last_name, rfid_tag, photo 
                         FROM employees WHERE id = ? 
                     """, (employee_id,))
                     emp_info = cursor.fetchone()
 
                     if emp_info:
                         full_name = f"{emp_info[0]} {emp_info[1]} {emp_info[2]}"
-                        id_number = emp_info[3]
+                        rfid_tag = emp_info[3]
                         photo_path = emp_info[4]
 
                         self.user_name_label.setText(full_name)
-                        self.id_number_label.setText(f"ID: {id_number}")
+                        self.id_number_label.setText(f"ID: {rfid_tag}")
 
                         if photo_path:
-                            pixmap = QPixmap()
-                            pixmap.loadFromData(photo_path)
-                            
+                            pixmap = QPixmap(photo_path)
                             if not pixmap.isNull():
-                                # If the pixmap is valid, display it
                                 self.photo_label.setPixmap(pixmap.scaled(200, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation))
                             else:
-                                # If the image failed to load
-                                self.photo_label.setText("Photo failed to load")
-                        else:
-                            # If there is no photo data in the database
-                            self.photo_label.setText("Photo not found")
+                                self.photo_label.setText("Photo not found")
 
                 else:
                     # UNAUTHORIZED: No repeated scan logic
