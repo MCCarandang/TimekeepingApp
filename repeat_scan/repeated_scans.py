@@ -1,6 +1,9 @@
 # Access Granted and Denied with Time IN and OUT 
 # Added Repeated Scan feature for Access Granted
 
+# Shows the photo of user pero hindi nakagitna yung user name and id number
+# Nagkaroon ulit ng repeated action pag nag time out which is dapat wala na
+
 import sys
 import time
 import os
