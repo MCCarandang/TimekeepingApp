@@ -103,6 +103,32 @@ class AccessGrantedWindow(QMainWindow):
         self.id_number_label.setText("")
         self.photo_label.clear()
 
+    def show_user_info(self, name, id_number, photo_pixmap):
+        self.user_name_label.setText(name)
+        self.id_number.setText(id_number)
+        self.photo_label.setPixmap(photo_pixmap)
+        
+        # Show for 1 second
+        self.user_info_timer  = QTimer()
+        self.user_info_timer.setSingleShot(True)
+        self.user_info_timer.timeout.connect(self.clear_user_info)
+        self.user_info_timer.start(1000)	 # 1000 ms = 1 second
+        
+    def clear_user_info(self):
+        self.user_name_label.clear()
+        self.id_number_label.clear()
+        self.photo_label.clear()
+        
+    def handle_rfid_scan(self,rfid_tag):
+        if self.is_repeated_scan(rfid_tag):
+            self.clear_user_info()
+            self.transaction_code_label.setText("IN")
+            self.message_label.setText("REPEATED ACTION")
+        else:
+            self.transaction_code_label.setText("IN" or "OUT")
+            self.message_label.setText("ACCESS GRANTED")
+            self.show_user_info(name, id_number, photo_pixmap)
+
     def check_rfid(self):
         try:
             id, _ = self.reader.read_no_block()
