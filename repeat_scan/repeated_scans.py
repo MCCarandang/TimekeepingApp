@@ -1,3 +1,6 @@
+# Repeated Transaction Working Fine
+# It shows user name, id number, photo
+
 import sys
 import time
 import os
@@ -105,7 +108,7 @@ class AccessGrantedWindow(QMainWindow):
 
     def show_user_info(self, name, id_number, photo_pixmap):
         self.user_name_label.setText(name)
-        self.id_number.setText(id_number)
+        self.id_number_label.setText(id_number)
         self.photo_label.setPixmap(photo_pixmap)
         
         # Show for 1 second
@@ -125,6 +128,8 @@ class AccessGrantedWindow(QMainWindow):
             self.transaction_code_label.setText("IN")
             self.message_label.setText("REPEATED ACTION")
         else:
+            name, id_number, photo_pixmap = self.get_user_info(rfid_tag)
+            transaction_status = self.get_transaction_status(rfid_tag)
             self.transaction_code_label.setText("IN" or "OUT")
             self.message_label.setText("ACCESS GRANTED")
             self.show_user_info(name, id_number, photo_pixmap)
@@ -165,6 +170,7 @@ class AccessGrantedWindow(QMainWindow):
                 
                         if last_code == 'I' and time_diff < 5:
                             # Repeated scan after Time IN
+                            self.clear_user_info()  # clear user info immediately
                             self.message_label.setText("REPEATED ACTION")
                             self.transaction_code_label.setText("IN")
                 
