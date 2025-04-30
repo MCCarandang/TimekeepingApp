@@ -1,5 +1,6 @@
 # Repeated Transaction Working Fine
 # It shows user name, id number, photo
+# Added exit button
 
 import sys
 import time
@@ -7,7 +8,7 @@ import os
 import sqlite3
 import RPi.GPIO as GPIO
 from mfrc522 import SimpleMFRC522
-from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QHBoxLayout, QWidget
+from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QHBoxLayout, QWidget, QPushButton
 from PyQt5.QtGui import QPalette, QColor, QFont, QPixmap
 from PyQt5.QtCore import Qt, QTimer, QDateTime, QByteArray, QBuffer
 
@@ -71,10 +72,20 @@ class AccessGrantedWindow(QMainWindow):
         label_layout.addWidget(self.id_number_label)
         label_layout.addWidget(self.photo_label, alignment=Qt.AlignLeft | Qt.AlignBottom)
 
+        self.exit_button = QPushButton()
+        self.exit_button.setFixedSize(40, 10)
+        self.exit_button.setStyleSheet("background-color: white;")
+        self.exit_button.clicked.connect(QApplication.quit)
+
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        button_layout.addWidget(self.exit_button)
+
         # Create a central widget to hold both the labels and user info widget
         central_widget = QWidget()
         main_layout = QVBoxLayout(central_widget)
         main_layout.addWidget(self.label_group)
+        main_layout.addLayout(button_layout)
 
         # Set the central widget
         self.setCentralWidget(central_widget)
@@ -257,7 +268,7 @@ class AccessGrantedWindow(QMainWindow):
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
-            self.showNormal()
+            QApplication.quit()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
