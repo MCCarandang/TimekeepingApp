@@ -32,6 +32,12 @@ class AccessGrantedWindow(QMainWindow):
         palette = QPalette()
         palette.setColor(QPalette.Window, QColor("navy"))
         self.setPalette(palette)
+
+        # Camera initialization
+        self.camera = PiCamera()
+        self.camera.resolution = (640, 480)
+        self.denied_photo_dir = "/home/raspberrypi/Desktop/Timekeeping/denied_photos"
+        os.makedirs(self.denied_photo_dir, exist_ok=True)
         
         # Create a QWidget as the container
         self.label_group = QWidget()
@@ -141,6 +147,19 @@ class AccessGrantedWindow(QMainWindow):
         self.user_name_label.clear()
         self.id_number_label.clear()
         self.photo_label.clear()
+
+    def capture_denied_photo(self, rfid_tag):
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        filename = f"{rfid_tag}_{timestamp}.jpg"
+        filepath = os.path.join(self.denied_photo_dir, filename)
+        try:
+            self.camera.start_preview()
+            sleep(1)
+            self.camera.capture(filepath)
+            self.camera.stop_preview()
+            print(f"Captured denied photo: {filepath}")
+        except Exception as e:
+            print(f"Error capturing denied photo: {e}")
         
     def handle_rfid_scan(self,rfid_tag):
         if self.is_repeated_scan(rfid_tag):
@@ -301,6 +320,9 @@ class AccessGrantedWindow(QMainWindow):
 
                     self.message_label.setText("ACCESS DENIED")
                     self.transaction_code_label.setText(get_label_from_code(new_transaction_code))
+
+                    # >>> Capture denied photo <<<
+                    self.capture_denied_photo(rfid_str)
 
                 conn.commit()
                 conn.close()
