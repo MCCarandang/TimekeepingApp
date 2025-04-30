@@ -284,15 +284,7 @@ class AccessGrantedWindow(QMainWindow):
                     """, (rfid_str,))
                     last_denied = cursor.fetchone()
 
-                    #if last_denied:
                     new_transaction_code = 'O' if last_denied and last_denied[0] == 'I' else 'I'
-                        #cursor.execute(""" 
-                         #   UPDATE denied_usr 
-                          #  SET transaction_code = ?, attempt_time = ? 
-                           # WHERE rfid_tag = ?
-                        #""", (new_transaction_code, current_time, rfid_str))
-                    #else:
-                     #   new_transaction_code = 'I'
                         
                     cursor.execute(""" 
                         INSERT INTO denied_usr (rfid_tag, transaction_code, attempt_time) 
