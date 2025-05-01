@@ -65,7 +65,7 @@ class AccessGrantedWindow(QMainWindow):
         self.id_number_label.setStyleSheet("color: yellow;")
         self.id_number_label.setAlignment(Qt.AlignCenter)
 
-        self.photo_label.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
+        self.photo_label.setAlignment(Qt.AlignCenter)
         self.photo_label.setMaximumHeight(150)
 
         # Create layout and add Widgets
@@ -76,7 +76,7 @@ class AccessGrantedWindow(QMainWindow):
         label_layout.addWidget(self.message_label)
         label_layout.addWidget(self.user_name_label)
         label_layout.addWidget(self.id_number_label)
-        label_layout.addWidget(self.photo_label, alignment=Qt.AlignLeft | Qt.AlignBottom)
+        label_layout.addWidget(self.photo_label, alignment=Qt.AlignCenter)
 
         self.exit_button = QPushButton()
         self.exit_button.setFixedSize(40, 10)
