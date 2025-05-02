@@ -251,7 +251,7 @@ class AccessGrantedWindow(QMainWindow):
                 # Handles the RFID Tag that triggers only the IN and OUT
                 if rfid_str == SPECIAL_RFID_TAG:
                     self.handle_special_tag()
-                    QTimer.singleShot(3000, self.reset_ui)
+                    # QTimer.singleShot(3000, self.reset_ui)
                     return
                 
                 conn = sqlite3.connect('/home/raspberrypi/Desktop/Timekeeping/timekeepingapp.db')

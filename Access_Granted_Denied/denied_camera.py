@@ -9,8 +9,12 @@ import sqlite3
 import RPi.GPIO as GPIO
 from mfrc522 import SimpleMFRC522
 from picamera import PiCamera
+from picamera.array import PiRGBArray
+import cv2
+import numpy as np
 import pygame
 import subprocess
+import io
 from io import BytesIO
 from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QHBoxLayout, QWidget, QPushButton
 from PyQt5.QtGui import QPalette, QColor, QFont, QPixmap
@@ -21,103 +25,117 @@ SPECIAL_RFID_TAG = "529365863836"
 def get_label_from_code(code):
     return "IN" if code == 'I' else "OUT"
 
-class AccessGrantedWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Timekeeping")
-        self.showFullScreen()
+def __init__(self):
+    super().__init__()
+    self.setWindowTitle("Timekeeping")
 
-        # Set background color to navy
-        self.setAutoFillBackground(True)
-        palette = QPalette()
-        palette.setColor(QPalette.Window, QColor("navy"))
-        self.setPalette(palette)
+    # Set background color to navy
+    self.setAutoFillBackground(True)
+    palette = QPalette()
+    palette.setColor(QPalette.Window, QColor("navy"))
+    self.setPalette(palette)
 
-        # Camera initialization
-        self.camera = PiCamera()
-        self.camera.resolution = (640, 480)
-        self.denied_photo_dir = "/home/raspberrypi/Desktop/Timekeeping/denied_photos"
-        os.makedirs(self.denied_photo_dir, exist_ok=True)
-        
-        # Create a QWidget as the container
-        self.label_group = QWidget()
+    # Create central widget and grid layout
+    central_widget = QWidget()
+    grid_layout = QGridLayout(central_widget)
+    grid_layout.setContentsMargins(20, 20, 20, 20)
+    grid_layout.setSpacing(15)
 
-        # Create the labels
-        self.date_time_label = QLabel()
-        self.transaction_code_label = QLabel("IN")
-        self.message_label = QLabel("TAP YOUR RFID TAG")
-        self.user_name_label = QLabel("")
-        self.id_number_label = QLabel("")
-        self.photo_label = QLabel()
+    # Set row and column stretch factors to limit how much space they take
+    grid_layout.setRowStretch(0, 0)  # Do not stretch row 0
+    grid_layout.setRowStretch(1, 1)  # Allow row 1 to grow slightly
+    grid_layout.setRowStretch(2, 1)
+    grid_layout.setRowStretch(3, 1)
+    grid_layout.setColumnStretch(0, 1)  # Allow column 0 to grow a bit
+    grid_layout.setColumnStretch(1, 2)  # Allow column 1 to take more space
+    grid_layout.setColumnStretch(2, 0)  # Do not stretch column 2
 
-        # Set fonts and styles
-        self.date_time_label.setFont(QFont("Helvetica", 15))
-        self.date_time_label.setStyleSheet("color: white;")
-        self.date_time_label.setAlignment(Qt.AlignRight | Qt.AlignTop)
+    # Set maximum width for labels and buttons to prevent stretching
+    self.transaction_code_label.setFixedWidth(200)
+    self.message_label.setFixedWidth(500)
 
-        self.transaction_code_label.setFont(QFont("Helvetica", 45, QFont.Bold))
-        self.transaction_code_label.setStyleSheet("color: white;")
-        self.transaction_code_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+    # Create the labels
+    self.date_time_label = QLabel()
+    self.transaction_code_label = QLabel("IN")
+    self.message_label = QLabel("TAP YOUR RFID TAG")
+    self.user_name_label = QLabel("")
+    self.id_number_label = QLabel("")
+    self.photo_label = QLabel()
+    self.camera_label = QLabel()
 
-        self.message_label.setFont(QFont("Helvetica", 45, QFont.Bold))
-        self.message_label.setStyleSheet("color: white;")
-        self.message_label.setAlignment(Qt.AlignCenter)
+    # Set properties
+    self.date_time_label.setFont(QFont("Helvetica", 15))
+    self.date_time_label.setStyleSheet("color: white;")
+    self.date_time_label.setAlignment(Qt.AlignRight | Qt.AlignTop)
 
-        self.user_name_label.setFont(QFont("Helvetica", 15, QFont.Bold))
-        self.user_name_label.setStyleSheet("color: gray;")
-        self.user_name_label.setAlignment(Qt.AlignCenter)
+    self.transaction_code_label.setFont(QFont("Helvetica", 45, QFont.Bold))
+    self.transaction_code_label.setStyleSheet("color: white;")
+    self.transaction_code_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
-        self.id_number_label.setFont(QFont("Helvetica", 15, QFont.Bold))
-        self.id_number_label.setStyleSheet("color: yellow;")
-        self.id_number_label.setAlignment(Qt.AlignCenter)
+    self.message_label.setFont(QFont("Helvetica", 45, QFont.Bold))
+    self.message_label.setStyleSheet("color: white;")
+    self.message_label.setAlignment(Qt.AlignCenter)
 
-        self.photo_label.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
-        self.photo_label.setMaximumHeight(150)
+    self.user_name_label.setFont(QFont("Helvetica", 15, QFont.Bold))
+    self.user_name_label.setStyleSheet("color: gray;")
+    self.user_name_label.setAlignment(Qt.AlignCenter)
 
-        # Create layout and add Widgets
-        label_layout = QVBoxLayout(self.label_group)
-        label_layout.setContentsMargins(0, 5, 0, 5)
-        label_layout.addWidget(self.date_time_label)
-        label_layout.addWidget(self.transaction_code_label)
-        label_layout.addWidget(self.message_label)
-        label_layout.addWidget(self.user_name_label)
-        label_layout.addWidget(self.id_number_label)
-        label_layout.addWidget(self.photo_label, alignment=Qt.AlignLeft | Qt.AlignBottom)
+    self.id_number_label.setFont(QFont("Helvetica", 15, QFont.Bold))
+    self.id_number_label.setStyleSheet("color: yellow;")
+    self.id_number_label.setAlignment(Qt.AlignCenter)
 
-        self.exit_button = QPushButton()
-        self.exit_button.setFixedSize(40, 10)
-        self.exit_button.setStyleSheet("background-color: white;")
-        self.exit_button.clicked.connect(QApplication.quit)
+    self.photo_label.setAlignment(Qt.AlignCenter)
+    self.photo_label.setMaximumHeight(150)
 
-        button_layout = QHBoxLayout()
-        button_layout.addStretch()
-        button_layout.addWidget(self.exit_button)
+    self.camera_label.setFixedSize(180, 180)
+    self.camera_label.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
 
-        # Create a central widget to hold both the labels and user info widget
-        central_widget = QWidget()
-        main_layout = QVBoxLayout(central_widget)
-        main_layout.addWidget(self.label_group)
-        main_layout.addLayout(button_layout)
+    # Add widgets to grid layout
+    grid_layout.addWidget(self.date_time_label, 0, 2, alignment=Qt.AlignRight)
+    grid_layout.addWidget(self.transaction_code_label, 1, 0)
+    grid_layout.addWidget(self.message_label, 1, 1, 1, 2)
+    grid_layout.addWidget(self.user_name_label, 2, 1, alignment=Qt.AlignCenter)
+    grid_layout.addWidget(self.id_number_label, 3, 1, alignment=Qt.AlignCenter)
+    grid_layout.addWidget(self.photo_label, 4, 1, alignment=Qt.AlignCenter)
+    grid_layout.addWidget(self.camera_label, 4, 0, alignment=Qt.AlignLeft | Qt.AlignBottom)
 
-        # Set the central widget
-        self.setCentralWidget(central_widget)
+    # Exit button
+    self.exit_button = QPushButton()
+    self.exit_button.setFixedSize(40, 10)
+    self.exit_button.setStyleSheet("background-color: white;")
+    self.exit_button.clicked.connect(QApplication.quit)
 
-        # Timers
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.update_date_time)
-        self.timer.start(1000)
-        self.update_date_time()
+    # Add exit button to bottom-right
+    grid_layout.addWidget(self.exit_button, 5, 2, alignment=Qt.AlignRight)
 
-        self.rfid_timer = QTimer(self)
-        self.rfid_timer.timeout.connect(self.check_rfid)
-        self.rfid_timer.start(500)
+    # Set layout
+    self.setCentralWidget(central_widget)
+    self.setFixedSize(1024, 768)  # Limit the window size to fit Raspberry Pi's screen
 
-        # RFID Setup
-        GPIO.setwarnings(False)
-        self.reader = SimpleMFRC522()
-        
-        # State
-        self.current_state = "IN"
+    # Initialize camera
+    self.camera = PiCamera(resolution=(320, 240), framerate=24)
+    self.raw_capture = PiRGBArray(self.camera, size=(320, 240))
+
+    self.camera_timer = QTimer(self)
+    self.camera_timer.timeout.connect(self.update_camera_preview)
+    self.camera_timer.start(30)
+
+    # Timers
+    self.timer = QTimer(self)
+    self.timer.timeout.connect(self.update_date_time)
+    self.timer.start(1000)
+    self.update_date_time()
+
+    self.rfid_timer = QTimer(self)
+    self.rfid_timer.timeout.connect(self.check_rfid)
+    self.rfid_timer.start(500)
+
+    # RFID Setup
+    GPIO.setwarnings(False)
+    self.reader = SimpleMFRC522()
+
+    # State
+    self.current_state = "IN"
 
     def update_date_time(self):
         current_time = QDateTime.currentDateTime()
@@ -148,19 +166,20 @@ class AccessGrantedWindow(QMainWindow):
         self.id_number_label.clear()
         self.photo_label.clear()
 
-    def capture_denied_photo(self, rfid_tag):
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
-        filename = f"{rfid_tag}_{timestamp}.jpg"
-        filepath = os.path.join(self.denied_photo_dir, filename)
+    def update_camera_preview(self):
         try:
-            self.camera.start_preview()
-            sleep(1)
-            self.camera.capture(filepath)
-            self.camera.stop_preview()
-            print(f"Captured denied photo: {filepath}")
+            self.raw_capture.truncate(0)
+            self.camera.capture(self.raw_capture, format="bgr", use_video_port=True)
+            image = self.raw_capture.array
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            image = cv2.resize(image, (180, 180))
+            height, width, channel = image.shape
+            bytes_per_line = 3 * width
+            qimg = QPixmap.fromImage(QImage(image.data, width, height, bytes_per_line, QImage.Format_RGB888))
+            self.camera_label.setPixmap(qimg)
         except Exception as e:
-            print(f"Error capturing denied photo: {e}")
-        
+            print(f"Camera preview error: {e}")
+    
     def handle_rfid_scan(self,rfid_tag):
         if self.is_repeated_scan(rfid_tag):
             self.clear_user_info()
@@ -287,7 +306,7 @@ class AccessGrantedWindow(QMainWindow):
                 
                         if photo_path:
                             pixmap = QPixmap()
-                            pixmap.loadFromData(photo_path)
+                            pixmap.load(photo_path)
                             if not pixmap.isNull():
                                 self.photo_label.setPixmap(pixmap.scaled(150, 150, Qt.KeepAspectRatio))
                             else:
@@ -303,15 +322,7 @@ class AccessGrantedWindow(QMainWindow):
                     """, (rfid_str,))
                     last_denied = cursor.fetchone()
 
-                    #if last_denied:
                     new_transaction_code = 'O' if last_denied and last_denied[0] == 'I' else 'I'
-                        #cursor.execute(""" 
-                         #   UPDATE denied_usr 
-                          #  SET transaction_code = ?, attempt_time = ? 
-                           # WHERE rfid_tag = ?
-                        #""", (new_transaction_code, current_time, rfid_str))
-                    #else:
-                     #   new_transaction_code = 'I'
                         
                     cursor.execute(""" 
                         INSERT INTO denied_usr (rfid_tag, transaction_code, attempt_time) 
@@ -320,9 +331,6 @@ class AccessGrantedWindow(QMainWindow):
 
                     self.message_label.setText("ACCESS DENIED")
                     self.transaction_code_label.setText(get_label_from_code(new_transaction_code))
-
-                    # >>> Capture denied photo <<<
-                    self.capture_denied_photo(rfid_str)
 
                 conn.commit()
                 conn.close()

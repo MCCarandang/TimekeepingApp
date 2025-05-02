@@ -9,12 +9,15 @@ import sqlite3
 import RPi.GPIO as GPIO
 from mfrc522 import SimpleMFRC522
 from picamera import PiCamera
+from picamera.array import PiRGBArray
+import cv2
+import numpy as np
 import pygame
 import subprocess
 import io
 from io import BytesIO
-from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QHBoxLayout, QWidget, QPushButton
-from PyQt5.QtGui import QPalette, QColor, QFont, QPixmap
+from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QGridLayout
+from PyQt5.QtGui import QPalette, QColor, QFont, QPixmap, QImage
 from PyQt5.QtCore import Qt, QTimer, QDateTime
 
 SPECIAL_RFID_TAG = "529365863836"
@@ -69,21 +72,39 @@ class AccessGrantedWindow(QMainWindow):
         self.photo_label.setAlignment(Qt.AlignCenter)
         self.photo_label.setMaximumHeight(150)
 
-        # Create layout and add Widgets
-        label_layout = QVBoxLayout(self.label_group)
-        label_layout.setContentsMargins(0, 5, 0, 5)
-        label_layout.addWidget(self.date_time_label)
-        label_layout.addWidget(self.transaction_code_label)
-        label_layout.addWidget(self.message_label)
-        label_layout.addWidget(self.user_name_label)
-        label_layout.addWidget(self.id_number_label)
-        label_layout.addWidget(self.photo_label, alignment=Qt.AlignCenter)
+        # Inside the __init__ method AFTER existing setup:
+        self.camera_label = QLabel()
+        self.camera_label.setFixedSize(180, 180)
+        self.camera_label.setStyleSheet("border: 2px solid white;")
+        self.camera_label.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
 
+        # Initialize camera
+        self.camera = PiCamera(resolution=(320, 240), framerate=24)
+        self.raw_capture = PiRGBArray(self.camera, size=(320, 240))
+
+        # Start QTimer to update camera preview
+        self.camera_timer = QTimer(self)
+        self.camera_timer.timeout.connect(self.update_camera_preview)
+        self.camera_timer.start(30)
+
+        # Create grid layout and add Widgets
+        grid_layout = QGridLayout(self.label_group)
+        grid_layout.setContentsMargins(0, 5, 0, 5)
+
+        grid_layout.addWidget(self.date_time_label, 0, 2, alignment=Qt.AlignRight)
+        grid_layout.addWidget(self.transaction_code_label, 1, 0)
+        grid_layout.addWidget(self.message_label, 1, 1, 1, 2)
+        grid_layout.addWidget(self.user_name_label, 2, 1, alignment=Qt.AlignCenter)
+        grid_layout.addWidget(self.id_number_label, 3, 1, alignment=Qt.AlignCenter)
+        grid_layout.addWidget(self.photo_label, 4, 1, alignment=Qt.AlignCenter)
+
+        # Exit button
         self.exit_button = QPushButton()
         self.exit_button.setFixedSize(40, 10)
         self.exit_button.setStyleSheet("background-color: white;")
         self.exit_button.clicked.connect(QApplication.quit)
 
+        # Button Layout (for exit button)
         button_layout = QHBoxLayout()
         button_layout.addStretch()
         button_layout.addWidget(self.exit_button)
@@ -91,8 +112,11 @@ class AccessGrantedWindow(QMainWindow):
         # Create a central widget to hold both the labels and user info widget
         central_widget = QWidget()
         main_layout = QVBoxLayout(central_widget)
-        main_layout.addWidget(self.label_group)
+        main_layout.addLayout(grid_layout)
         main_layout.addLayout(button_layout)
+
+        # The camera preview should be added separately in the bottom-left corner
+        main_layout.addWidget(self.camera_label, alignment=Qt.AlignLeft | Qt.AlignBottom)
 
         # Set the central widget
         self.setCentralWidget(central_widget)
@@ -142,6 +166,20 @@ class AccessGrantedWindow(QMainWindow):
         self.user_name_label.clear()
         self.id_number_label.clear()
         self.photo_label.clear()
+
+    def update_camera_preview(self):
+        try:
+            self.raw_capture.truncate(0)
+            self.camera.capture(self.raw_capture, format="bgr", use_video_port=True)
+            image = self.raw_capture.array
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            image = cv2.resize(image, (180, 180))
+            height, width, channel = image.shape
+            bytes_per_line = 3 * width
+            qimg = QPixmap.fromImage(QImage(image.data, width, height, bytes_per_line, QImage.Format_RGB888))
+            self.camera_label.setPixmap(qimg)
+        except Exception as e:
+            print(f"Camera preview error: {e}")
         
     def handle_rfid_scan(self,rfid_tag):
         if self.is_repeated_scan(rfid_tag):

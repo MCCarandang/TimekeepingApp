@@ -3,19 +3,15 @@
 
 import sys
 import time
-from time import sleep
 import os
 import sqlite3
 import RPi.GPIO as GPIO
 from mfrc522 import SimpleMFRC522
 from picamera import PiCamera
-import pygame
-import subprocess
-import io
 from io import BytesIO
 from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QHBoxLayout, QWidget, QPushButton
 from PyQt5.QtGui import QPalette, QColor, QFont, QPixmap
-from PyQt5.QtCore import Qt, QTimer, QDateTime
+from PyQt5.QtCore import Qt, QTimer, QDateTime, QByteArray, QBuffer
 
 SPECIAL_RFID_TAG = "529365863836"
 
@@ -77,7 +73,7 @@ class AccessGrantedWindow(QMainWindow):
         label_layout.addWidget(self.message_label)
         label_layout.addWidget(self.user_name_label)
         label_layout.addWidget(self.id_number_label)
-        label_layout.addWidget(self.photo_label, alignment=Qt.AlignCenter)
+        label_layout.addWidget(self.photo_label)
 
         self.exit_button = QPushButton()
         self.exit_button.setFixedSize(40, 10)
@@ -174,7 +170,7 @@ class AccessGrantedWindow(QMainWindow):
                 # Handles the RFID Tag that triggers only the IN and OUT
                 if rfid_str == SPECIAL_RFID_TAG:
                     self.handle_special_tag()
-                    QTimer.singleShot(3000, self.reset_ui)
+                    # QTimer.singleShot(3000, self.reset_ui)
                     return
                 
                 conn = sqlite3.connect('/home/raspberrypi/Desktop/Timekeeping/timekeepingapp.db')
@@ -269,7 +265,7 @@ class AccessGrantedWindow(QMainWindow):
                 
                         if photo_path:
                             pixmap = QPixmap()
-                            pixmap.load(photo_path)
+                            pixmap.loadFromData(photo_path)
                             if not pixmap.isNull():
                                 self.photo_label.setPixmap(pixmap.scaled(150, 150, Qt.KeepAspectRatio))
                             else:
@@ -285,7 +281,15 @@ class AccessGrantedWindow(QMainWindow):
                     """, (rfid_str,))
                     last_denied = cursor.fetchone()
 
+                    #if last_denied:
                     new_transaction_code = 'O' if last_denied and last_denied[0] == 'I' else 'I'
+                        #cursor.execute(""" 
+                         #   UPDATE denied_usr 
+                          #  SET transaction_code = ?, attempt_time = ? 
+                           # WHERE rfid_tag = ?
+                        #""", (new_transaction_code, current_time, rfid_str))
+                    #else:
+                     #   new_transaction_code = 'I'
                         
                     cursor.execute(""" 
                         INSERT INTO denied_usr (rfid_tag, transaction_code, attempt_time) 
