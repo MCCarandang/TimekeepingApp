@@ -3,16 +3,10 @@
 
 import sys
 import time
-from time import sleep
 import os
 import sqlite3
 import RPi.GPIO as GPIO
 from mfrc522 import SimpleMFRC522
-from picamera import PiCamera
-import pygame
-import subprocess
-import io
-from io import BytesIO
 from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QHBoxLayout, QWidget, QPushButton
 from PyQt5.QtGui import QPalette, QColor, QFont, QPixmap
 from PyQt5.QtCore import Qt, QTimer, QDateTime
