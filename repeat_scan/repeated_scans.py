@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QHBo
 from PyQt5.QtGui import QPalette, QColor, QFont, QPixmap
 from PyQt5.QtCore import Qt, QTimer, QDateTime
 
-SPECIAL_RFID_TAG = "529365863836"
+SPECIAL_RFID_TAGS = {"529365863836", "452840563394"}
 
 def get_label_from_code(code):
     return "IN" if code == 'I' else "OUT"
@@ -166,7 +166,7 @@ class AccessGrantedWindow(QMainWindow):
                 rfid_str = str(id)
                 
                 # Handles the RFID Tag that triggers only the IN and OUT
-                if rfid_str == SPECIAL_RFID_TAG:
+                if rfid_str in SPECIAL_RFID_TAGS:
                     self.handle_special_tag()
                     QTimer.singleShot(3000, self.reset_ui)
                     return
