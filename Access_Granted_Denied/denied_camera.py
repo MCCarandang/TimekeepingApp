@@ -3,15 +3,19 @@
 
 import sys
 import time
+from time import sleep
 import os
 import sqlite3
 import RPi.GPIO as GPIO
 from mfrc522 import SimpleMFRC522
-from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QHBoxLayout, QWidget, QPushButton
-from PyQt5.QtGui import QPalette, QColor, QFont, QPixmap
+from picamera import PiCamera
+from PIL import Image
+import io
+from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QSizePolicy
+from PyQt5.QtGui import QPalette, QColor, QFont, QPixmap, QImage
 from PyQt5.QtCore import Qt, QTimer, QDateTime
 
-SPECIAL_RFID_TAG = "529365863836"
+SPECIAL_RFID_TAGS = {"529365863836", "452840563394"}
 
 def get_label_from_code(code):
     return "IN" if code == 'I' else "OUT"
@@ -62,6 +66,10 @@ class AccessGrantedWindow(QMainWindow):
 
         self.photo_label.setAlignment(Qt.AlignCenter)
         self.photo_label.setMaximumHeight(150)
+        
+        self.camera_label = QLabel()
+        self.camera_label.setFixedSize(180, 180)
+        self.camera_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
         # Create layout and add Widgets
         label_layout = QVBoxLayout(self.label_group)
@@ -70,9 +78,10 @@ class AccessGrantedWindow(QMainWindow):
         label_layout.addWidget(self.transaction_code_label)
         label_layout.addWidget(self.message_label)
         label_layout.addWidget(self.user_name_label)
+        label_layout.addWidget(self.camera_label, alignment=Qt.AlignLeft | Qt.AlignBottom)
         label_layout.addWidget(self.id_number_label)
-        label_layout.addWidget(self.photo_label, alignment=Qt.AlignCenter)
-
+        label_layout.addWidget(self.photo_label)
+        
         self.exit_button = QPushButton()
         self.exit_button.setFixedSize(40, 10)
         self.exit_button.setStyleSheet("background-color: white;")
@@ -100,6 +109,10 @@ class AccessGrantedWindow(QMainWindow):
         self.rfid_timer = QTimer(self)
         self.rfid_timer.timeout.connect(self.check_rfid)
         self.rfid_timer.start(500)
+        
+        self.camera_preview_timer = QTimer()
+        self.camera_preview_timer.timeout.connect(self.update_camera_preview)
+        self.camera_preview_timer.start(300)
 
         # RFID Setup
         GPIO.setwarnings(False)
@@ -107,6 +120,12 @@ class AccessGrantedWindow(QMainWindow):
         
         # State
         self.current_state = "IN"
+        
+        self.camera = PiCamera()
+        self.camera.resolution = (180, 180)
+        self.camera.rotation = 180
+        self.setGeometry(0, 0, QApplication.desktop().screenGeometry().width(), QApplication.desktop().screenGeometry().height())
+        #self.camera.start_preview(fullscreen=False, window=(0, 900, 180, 180))
 
     def update_date_time(self):
         current_time = QDateTime.currentDateTime()
@@ -157,18 +176,46 @@ class AccessGrantedWindow(QMainWindow):
         self.user_name_label.clear()
         self.id_number_label.clear()
         self.photo_label.clear()
-
+        
+    def update_camera_preview(self):
+        try:
+            stream = io.BytesIO()
+            self.camera.capture(stream, format='jpeg')
+            stream.seek(0)
+            image = Image.open(stream)
+            
+            # Resize to 180x180
+            image = image.resize((180,180))
+            
+            #Convert to RGB and then to QImage
+            image = image.convert("RGB")
+            data = image.tobytes("raw", "RGB")
+            qimage = QImage(data, image.width, image.height, QImage.Format_RGB888)
+            
+            # Set preview
+            pixmap = QPixmap.fromImage(qimage)
+            self.camera_label.setPixmap(pixmap)
+            
+        except Exception as e:
+            print(f"Camera update error: {e}")
+        
+    def closeEvent(self, event):
+        self.camera.stop_preview()
+        self.camera.close()
+        event.accept()
+        
     def check_rfid(self):
         try:
             id, _ = self.reader.read_no_block()
 
             if id:
                 rfid_str = str(id)
+                print(f"Scanned RFID: {rfid_str}")
                 
                 # Handles the RFID Tag that triggers only the IN and OUT
-                if rfid_str == SPECIAL_RFID_TAG:
+                if rfid_str in SPECIAL_RFID_TAGS:
                     self.handle_special_tag()
-                    QTimer.singleShot(3000, self.reset_ui)
+                    # QTimer.singleShot(3000, self.reset_ui)
                     return
                 
                 conn = sqlite3.connect('/home/raspberrypi/Desktop/Timekeeping/timekeepingapp.db')
@@ -263,7 +310,7 @@ class AccessGrantedWindow(QMainWindow):
                 
                         if photo_path:
                             pixmap = QPixmap()
-                            pixmap.load(photo_path)
+                            pixmap.loadFromData(photo_path)
                             if not pixmap.isNull():
                                 self.photo_label.setPixmap(pixmap.scaled(150, 150, Qt.KeepAspectRatio))
                             else:
@@ -279,6 +326,7 @@ class AccessGrantedWindow(QMainWindow):
                     """, (rfid_str,))
                     last_denied = cursor.fetchone()
 
+                    #if last_denied:
                     new_transaction_code = 'O' if last_denied and last_denied[0] == 'I' else 'I'
                         
                     cursor.execute(""" 
