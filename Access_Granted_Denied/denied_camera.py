@@ -1,6 +1,11 @@
-# Camera Preview Working
-# Can capture photo when access denied taps for time in and time out
-# Captured photo is not yet connected to the database
+# Displays a Camera Preview
+# Captures a photo when access denied taps for in and out
+# Captured photo is saved both in the disk and database
+# Done with 4 Features
+# Changing From In and Out
+# Access Granted
+# Access Denied
+# Repeated Transaction
 
 import sys
 import time
@@ -72,8 +77,8 @@ class AccessGrantedWindow(QMainWindow):
         self.camera_label.setFixedSize(180, 180)
         self.camera_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
-        self.exit_button = QPushButton("Exit")
-        self.exit_button.setFixedSize(60, 30)
+        self.exit_button = QPushButton()
+        self.exit_button.setFixedSize(60, 20)
         self.exit_button.setStyleSheet("background-color: white;")
         self.exit_button.clicked.connect(QApplication.quit)
 
@@ -87,7 +92,7 @@ class AccessGrantedWindow(QMainWindow):
         
         # Horizontal layout: camera | user info | exit button
         camera_info_layout = QHBoxLayout()
-        camera_info_layout.addWidget(self.camera_label, alignment=Qt.AlignLeft)
+        camera_info_layout.addWidget(self.camera_label, alignment=Qt.AlignLeft | Qt.AlignBottom)
         camera_info_layout.setSpacing(100)
         camera_info_layout.addWidget(user_info_widget, alignment=Qt.AlignCenter)
         camera_info_layout.addStretch()
@@ -99,7 +104,7 @@ class AccessGrantedWindow(QMainWindow):
         label_layout.setSpacing(10)
         label_layout.addWidget(self.date_time_label)
         label_layout.addWidget(self.transaction_code_label)
-        label_layout.setSpacing()
+        label_layout.setSpacing(0)
         label_layout.addWidget(self.message_label)
         label_layout.addLayout(camera_info_layout)
         
@@ -217,7 +222,7 @@ class AccessGrantedWindow(QMainWindow):
     def capture_denied_photo(self, transaction_code):
         try:
             # Ensure directory exists
-            save_dir = "/home/raspberrypi/Desktop/Timekeeping/denied_photos"
+            save_dir = "/home/raspberrypi/Desktop/Timkeeping/denied_photos"
             os.makedirs(save_dir, exist_ok=True)
 
             timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -241,7 +246,9 @@ class AccessGrantedWindow(QMainWindow):
 
             # Stop preview updates for 2 seconds
             self.camera_preview_timer.stop()
-            QTimer.singleShot(2000, self.resume_camera_preview)
+            QTimer.singleShot(5000, self.resume_camera_preview)
+            
+            return file_path
 
         except Exception as e:
             print(f"Failed to capture denied photo: {e}")
@@ -255,7 +262,6 @@ class AccessGrantedWindow(QMainWindow):
 
             if id:
                 rfid_str = str(id)
-                print(f"Scanned RFID: {rfid_str}")
                 
                 # Handles the RFID Tag that triggers only the IN and OUT
                 if rfid_str in SPECIAL_RFID_TAGS:
@@ -263,7 +269,7 @@ class AccessGrantedWindow(QMainWindow):
                     # QTimer.singleShot(3000, self.reset_ui)
                     return
                 
-                conn = sqlite3.connect('/home/raspberrypi/Desktop/Timekeeping/timekeepingapp.db')
+                conn = sqlite3.connect('/home/raspberrypi/Desktop/TimekeepingApp/timekeepingapp.db')
                 cursor = conn.cursor()
 
                 current_time = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -373,11 +379,19 @@ class AccessGrantedWindow(QMainWindow):
 
                     #if last_denied:
                     new_transaction_code = 'O' if last_denied and last_denied[0] == 'I' else 'I'
-                        
+                    
+                    # capture the denied photo and get its path
+                    photo_path = self.capture_denied_photo(new_transaction_code)
+                    
+                    # Convert image to binary (BLOB)
+                    with open(photo_path, 'rb') as file:
+                        photo_blob = file.read()
+                    
+                    # Insert into denied_usr with photo_blob
                     cursor.execute(""" 
-                        INSERT INTO denied_usr (rfid_tag, transaction_code, attempt_time) 
-                        VALUES (?, ?, ?) 
-                    """, (rfid_str, new_transaction_code, current_time))
+                        INSERT INTO denied_usr (rfid_tag, transaction_code, photo, attempt_time) 
+                        VALUES (?, ?, ?, ?) 
+                    """, (rfid_str, new_transaction_code, photo_blob, current_time))
 
                     self.message_label.setText("ACCESS DENIED")
                     self.transaction_code_label.setText(get_label_from_code(new_transaction_code))
