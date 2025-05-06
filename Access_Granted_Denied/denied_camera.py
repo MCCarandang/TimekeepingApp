@@ -1,5 +1,6 @@
-# Repeated Transaction Working Fine
-# It shows user name, id number, photo
+# Camera Preview Working
+# Can capture photo when access denied taps for time in and time out
+# Captured photo is not yet connected to the database
 
 import sys
 import time
@@ -71,33 +72,42 @@ class AccessGrantedWindow(QMainWindow):
         self.camera_label.setFixedSize(180, 180)
         self.camera_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
-        # Create layout and add Widgets
-        label_layout = QVBoxLayout(self.label_group)
-        label_layout.setContentsMargins(0, 5, 0, 5)
-        label_layout.addWidget(self.date_time_label)
-        label_layout.addWidget(self.transaction_code_label)
-        label_layout.addWidget(self.message_label)
-        label_layout.addWidget(self.user_name_label)
-        label_layout.addWidget(self.camera_label, alignment=Qt.AlignLeft | Qt.AlignBottom)
-        label_layout.addWidget(self.id_number_label)
-        label_layout.addWidget(self.photo_label)
-        
-        self.exit_button = QPushButton()
-        self.exit_button.setFixedSize(40, 10)
+        self.exit_button = QPushButton("Exit")
+        self.exit_button.setFixedSize(60, 30)
         self.exit_button.setStyleSheet("background-color: white;")
         self.exit_button.clicked.connect(QApplication.quit)
 
-        button_layout = QHBoxLayout()
-        button_layout.addStretch()
-        button_layout.addWidget(self.exit_button)
-
-        # Create a central widget to hold both the labels and user info widget
+        # Group user info (VBox)
+        user_info_group = QVBoxLayout()
+        user_info_group.addWidget(self.user_name_label)
+        user_info_group.addWidget(self.id_number_label)
+        user_info_group.addWidget(self.photo_label)
+        user_info_widget = QWidget()
+        user_info_widget.setLayout(user_info_group)
+        
+        # Horizontal layout: camera | user info | exit button
+        camera_info_layout = QHBoxLayout()
+        camera_info_layout.addWidget(self.camera_label, alignment=Qt.AlignLeft)
+        camera_info_layout.setSpacing(100)
+        camera_info_layout.addWidget(user_info_widget, alignment=Qt.AlignCenter)
+        camera_info_layout.addStretch()
+        camera_info_layout.addWidget(self.exit_button, alignment=Qt.AlignRight | Qt.AlignBottom)
+        
+        # Final vertical layout for the label group
+        label_layout = QVBoxLayout(self.label_group)
+        label_layout.setContentsMargins(0, 5, 0, 5)
+        label_layout.setSpacing(10)
+        label_layout.addWidget(self.date_time_label)
+        label_layout.addWidget(self.transaction_code_label)
+        label_layout.setSpacing()
+        label_layout.addWidget(self.message_label)
+        label_layout.addLayout(camera_info_layout)
+        
+        # Central widget
         central_widget = QWidget()
         main_layout = QVBoxLayout(central_widget)
         main_layout.addWidget(self.label_group)
-        main_layout.addLayout(button_layout)
-
-        # Set the central widget
+        
         self.setCentralWidget(central_widget)
 
         # Timers
@@ -203,6 +213,41 @@ class AccessGrantedWindow(QMainWindow):
         self.camera.stop_preview()
         self.camera.close()
         event.accept()
+
+    def capture_denied_photo(self, transaction_code):
+        try:
+            # Ensure directory exists
+            save_dir = "/home/raspberrypi/Desktop/Timekeeping/denied_photos"
+            os.makedirs(save_dir, exist_ok=True)
+
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            if transaction_code == 'I':
+                filename = f"denied_IN_{timestamp}.jpg"
+            else:
+                filename = f"denied_OUT_{timestamp}.jpg"
+
+            file_path = os.path.join(save_dir, filename)
+
+            # Capture photo
+            self.camera.capture(file_path)
+
+            # Display the captured photo in the camera_label
+            image = Image.open(file_path)
+            image = image.resize((180, 180)).convert("RGB")
+            data = image.tobytes("raw", "RGB")
+            qimage = QImage(data, image.width, image.height, QImage.Format_RGB888)
+            pixmap = QPixmap.fromImage(qimage)
+            self.camera_label.setPixmap(pixmap)
+
+            # Stop preview updates for 2 seconds
+            self.camera_preview_timer.stop()
+            QTimer.singleShot(2000, self.resume_camera_preview)
+
+        except Exception as e:
+            print(f"Failed to capture denied photo: {e}")
+
+    def resume_camera_preview(self):
+        self.camera_preview_timer.start(300)
         
     def check_rfid(self):
         try:
@@ -336,6 +381,7 @@ class AccessGrantedWindow(QMainWindow):
 
                     self.message_label.setText("ACCESS DENIED")
                     self.transaction_code_label.setText(get_label_from_code(new_transaction_code))
+                    self.capture_denied_photo(new_transaction_code)
 
                 conn.commit()
                 conn.close()
