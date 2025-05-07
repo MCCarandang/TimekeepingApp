@@ -244,8 +244,8 @@ class AccessGrantedWindow(QMainWindow):
             pixmap = QPixmap.fromImage(qimage)
             self.camera_label.setPixmap(pixmap)
 
-            # Stop preview updates for 2 seconds
-            self.camera_preview_timer.stop()
+            # Stop preview updates for 5 seconds
+            # self.camera_preview_timer.stop()
             QTimer.singleShot(5000, self.resume_camera_preview)
             
             return file_path
@@ -339,7 +339,7 @@ class AccessGrantedWindow(QMainWindow):
                     cursor.execute("""
                         INSERT INTO attd_logs (id_number, rfid_tag, transaction_code, transaction_time)
                         VALUES (?, ?, ?, ?)
-                    """, (employee_id, rfid_str, transaction_type, current_time))
+                    """, (id_number, rfid_str, transaction_type, current_time))
                 
                     self.message_label.setText("ACCESS GRANTED")
                     self.transaction_code_label.setText(get_label_from_code(transaction_type))
@@ -389,13 +389,12 @@ class AccessGrantedWindow(QMainWindow):
                     
                     # Insert into denied_usr with photo_blob
                     cursor.execute(""" 
-                        INSERT INTO denied_usr (rfid_tag, transaction_code, photo, attempt_time) 
-                        VALUES (?, ?, ?, ?) 
-                    """, (rfid_str, new_transaction_code, photo_blob, current_time))
+                        INSERT INTO denied_usr (id_number, rfid_tag, transaction_code, photo, attempt_time) 
+                        VALUES (?, ?, ?, ?, ?) 
+                    """, (id_number, rfid_str, new_transaction_code, photo_blob, current_time))
 
                     self.message_label.setText("ACCESS DENIED")
                     self.transaction_code_label.setText(get_label_from_code(new_transaction_code))
-                    self.capture_denied_photo(new_transaction_code)
 
                 conn.commit()
                 conn.close()
