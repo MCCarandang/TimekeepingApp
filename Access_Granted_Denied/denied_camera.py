@@ -115,6 +115,16 @@ class AccessGrantedWindow(QMainWindow):
         
         self.setCentralWidget(central_widget)
 
+        self.camera = PiCamera()
+        self.camera.resolution = (180, 180)
+        self.camera.rotation = 180
+        self.setGeometry(0, 0, QApplication.desktop().screenGeometry().width(), QApplication.desktop().screenGeometry().height())
+        #self.camera.start_preview(fullscreen=False, window=(0, 900, 180, 180))
+
+        # RFID Setup
+        GPIO.setwarnings(False)
+        self.reader = SimpleMFRC522()
+
         # Timers
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_date_time)
@@ -128,19 +138,9 @@ class AccessGrantedWindow(QMainWindow):
         self.camera_preview_timer = QTimer()
         self.camera_preview_timer.timeout.connect(self.update_camera_preview)
         self.camera_preview_timer.start(300)
-
-        # RFID Setup
-        GPIO.setwarnings(False)
-        self.reader = SimpleMFRC522()
         
         # State
         self.current_state = "IN"
-        
-        self.camera = PiCamera()
-        self.camera.resolution = (180, 180)
-        self.camera.rotation = 180
-        self.setGeometry(0, 0, QApplication.desktop().screenGeometry().width(), QApplication.desktop().screenGeometry().height())
-        #self.camera.start_preview(fullscreen=False, window=(0, 900, 180, 180))
 
     def update_date_time(self):
         current_time = QDateTime.currentDateTime()
@@ -222,7 +222,7 @@ class AccessGrantedWindow(QMainWindow):
     def capture_denied_photo(self, transaction_code):
         try:
             # Ensure directory exists
-            save_dir = "/home/raspberrypi/Desktop/Timkeeping/denied_photos"
+            save_dir = "/home/raspberrypi/Desktop/Timekeeping/denied_photos"
             os.makedirs(save_dir, exist_ok=True)
 
             timestamp = time.strftime("%Y%m%d_%H%M%S")
