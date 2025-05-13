@@ -21,10 +21,10 @@ class AttendanceScreen(QWidget):
 
         # Top bar: Status and Date/Time
         top_bar = QHBoxLayout()
-        status_label = QLabel("IN")
-        status_label.setStyleSheet("color: #fefae0;")
-        status_label.setFont(QFont("Arial", 64, QFont.Bold))
-        top_bar.addWidget(status_label, alignment=Qt.AlignLeft | Qt.AlignTop)
+        transaction_code_label = QLabel("")
+        transaction_code_label.setStyleSheet("color: #fefae0;")
+        transaction_code_label.setFont(QFont("Arial", 64, QFont.Bold))
+        top_bar.addWidget(transaction_code_label, alignment=Qt.AlignLeft | Qt.AlignTop)
 
         self.datetime_label = QLabel()
         self.datetime_label.setStyleSheet("color: white;")
@@ -62,17 +62,17 @@ class AttendanceScreen(QWidget):
         info_layout.addWidget(photo_label)
 
         # Text Info
-        text_info = QVBoxLayout()
-        name = QLabel("MARIANE C. CARANDANG")
-        emp_id = QLabel("EMP0001")
-        dept = QLabel("IT DEPARTMENT")
+        user_info = QVBoxLayout()
+        name = QLabel("")
+        emp_id = QLabel("")
+        dept = QLabel("")
         timestamp = QLabel(QDateTime.currentDateTime().toString("yyyy-MM-dd HH:mm:ss"))
 
         for label in [name, emp_id, dept, timestamp]:
             label.setFont(QFont("Arial", 20))
-            text_info.addWidget(label)
+            user_info.addWidget(label)
 
-        info_layout.addLayout(text_info)
+        info_layout.addLayout(user_info)
         info_container.addWidget(info_widget)
         main_layout.addLayout(info_container)
 

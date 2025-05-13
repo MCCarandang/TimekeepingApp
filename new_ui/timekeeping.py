@@ -17,7 +17,7 @@ from mfrc522 import SimpleMFRC522
 from picamera import PiCamera
 from PIL import Image
 import io
-from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QSizePolicy
+from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QSizePolicy, QSpacerItem
 from PyQt5.QtGui import QPalette, QColor, QFont, QPixmap, QImage
 from PyQt5.QtCore import Qt, QTimer, QDateTime
 
@@ -135,10 +135,6 @@ class AccessGrantedWindow(QMainWindow):
         self.rfid_timer.timeout.connect(self.check_rfid)
         self.rfid_timer.start(500)
         
-        self.camera_preview_timer = QTimer()
-        self.camera_preview_timer.timeout.connect(self.update_camera_preview)
-        self.camera_preview_timer.start(300)
-        
         # State
         self.current_state = "IN"
 
@@ -149,7 +145,7 @@ class AccessGrantedWindow(QMainWindow):
         self.date_time_label.setText(f"{date_str}\n{time_str}")
         
     def reset_ui(self):
-        self.message_label.setText("TAP YOUR RFID TAG")
+        self.message_label.setText("TAP YOUR ID")
         self.transaction_code_label.setText("IN")
         self.user_name_label.setText("")
         self.id_number_label.setText("")
@@ -191,33 +187,6 @@ class AccessGrantedWindow(QMainWindow):
         self.user_name_label.clear()
         self.id_number_label.clear()
         self.photo_label.clear()
-        
-    def update_camera_preview(self):
-        try:
-            stream = io.BytesIO()
-            self.camera.capture(stream, format='jpeg')
-            stream.seek(0)
-            image = Image.open(stream)
-            
-            # Resize to 180x180
-            image = image.resize((180,180))
-            
-            #Convert to RGB and then to QImage
-            image = image.convert("RGB")
-            data = image.tobytes("raw", "RGB")
-            qimage = QImage(data, image.width, image.height, QImage.Format_RGB888)
-            
-            # Set preview
-            pixmap = QPixmap.fromImage(qimage)
-            self.camera_label.setPixmap(pixmap)
-            
-        except Exception as e:
-            print(f"Camera update error: {e}")
-        
-    def closeEvent(self, event):
-        self.camera.stop_preview()
-        self.camera.close()
-        event.accept()
 
     def capture_denied_photo(self, transaction_code):
         try:
@@ -244,17 +213,15 @@ class AccessGrantedWindow(QMainWindow):
             pixmap = QPixmap.fromImage(qimage)
             self.camera_label.setPixmap(pixmap)
 
-            # Stop preview updates for 5 seconds
-            # self.camera_preview_timer.stop()
-            QTimer.singleShot(5000, self.resume_camera_preview)
+            QTimer.singleShot(3000, self.clear_camera_label)
             
             return file_path
 
         except Exception as e:
             print(f"Failed to capture denied photo: {e}")
 
-    def resume_camera_preview(self):
-        self.camera_preview_timer.start(300)
+    def clear_camera_label(self):
+        self.camera_label.clear()
         
     def check_rfid(self):
         try:
