@@ -159,11 +159,13 @@ class AccessGrantedWindow(QMainWindow):
         self.transaction_code_label.setText("IN")
         self.user_name_label.setText("")
         self.id_number_label.setText("")
+        self.dept_label.setText("")
         self.photo_label.clear()
 
-    def show_user_info(self, name, id_number, photo_pixmap):
+    def show_user_info(self, name, id_number, dept, photo_pixmap):
         self.user_name_label.setText(name)
         self.id_number_label.setText(id_number)
+        self.dept_label.setText(dept)
         self.photo_label.setPixmap(photo_pixmap)
         
         # Show for 1 second
@@ -175,6 +177,7 @@ class AccessGrantedWindow(QMainWindow):
     def clear_user_info(self):
         self.user_name_label.clear()
         self.id_number_label.clear()
+        self.dept_label.clear()
         self.photo_label.clear()
         
     def handle_rfid_scan(self,rfid_tag):
@@ -183,11 +186,11 @@ class AccessGrantedWindow(QMainWindow):
             self.transaction_code_label.setText("IN")
             self.message_label.setText("REPEATED ACTION")
         else:
-            name, id_number, photo_pixmap = self.get_user_info(rfid_tag)
+            name, id_number, dept, photo_pixmap = self.get_user_info(rfid_tag)
             transaction_status = self.get_transaction_status(rfid_tag)
             self.transaction_code_label.setText("IN" or "OUT")
             self.message_label.setText("ACCESS GRANTED")
-            self.show_user_info(name, id_number, photo_pixmap)
+            self.show_user_info(name, id_number, dept, photo_pixmap)
             
     def handle_special_tag(self):
         #Trigger IN/OUT label without accessing the database
@@ -196,6 +199,7 @@ class AccessGrantedWindow(QMainWindow):
         self.message_label.setText("TAP YOUR RFID TAG")
         self.user_name_label.clear()
         self.id_number_label.clear()
+        self.dept_label.clear()
         self.photo_label.clear()
 
     def capture_denied_photo(self, transaction_code):
