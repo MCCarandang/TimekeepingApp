@@ -40,13 +40,12 @@ class AccessGrantedWindow(QMainWindow):
         
         # Create a QWidget as the container
         self.label_group = QWidget()
-
-        # Create the labels
         self.date_time_label = QLabel()
         self.transaction_code_label = QLabel("IN")
         self.message_label = QLabel("TAP YOUR RFID TAG")
         self.user_name_label = QLabel("")
         self.id_number_label = QLabel("")
+        self.dept_label = QLabel("")
         self.photo_label = QLabel()
 
         # Set fonts and styles
@@ -70,6 +69,10 @@ class AccessGrantedWindow(QMainWindow):
         self.id_number_label.setStyleSheet("color: yellow;")
         self.id_number_label.setAlignment(Qt.AlignCenter)
 
+        self.dept_label.setFont(QFont("Helvetica", 15, QFont.Bold))
+        self.dept_label.setStyleSheet("color: gray")
+        self.dept_label.setAlignment(Qt.AlignCenter)
+
         self.photo_label.setAlignment(Qt.AlignCenter)
         self.photo_label.setMaximumHeight(150)
         
@@ -86,6 +89,7 @@ class AccessGrantedWindow(QMainWindow):
         name_id_layout = QVBoxLayout()
         name_id_layout.addWidget(self.user_name_label)
         name_id_layout.addWidget(self.id_number_label)
+        name_id_layout.addWidget(self.dept_label)
         name_id_layout.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
         # Create horizontal layout with photo on the left and name/ID on the right
@@ -126,7 +130,6 @@ class AccessGrantedWindow(QMainWindow):
         self.camera.resolution = (180, 180)
         self.camera.rotation = 180
         self.setGeometry(0, 0, QApplication.desktop().screenGeometry().width(), QApplication.desktop().screenGeometry().height())
-        #self.camera.start_preview(fullscreen=False, window=(0, 900, 180, 180))
 
         # RFID Setup
         GPIO.setwarnings(False)
@@ -327,9 +330,11 @@ class AccessGrantedWindow(QMainWindow):
                         full_name = f"{emp_info[0]} {emp_info[1]} {emp_info[2]}"
                         id_number = emp_info[3]
                         photo_path = emp_info[4]
+                        department = emp_info[5]
                 
                         self.user_name_label.setText(full_name)
                         self.id_number_label.setText(f"ID: {id_number}")
+                        self.dept_label.setText(f"{department}")
                 
                         if photo_path:
                             pixmap = QPixmap()
