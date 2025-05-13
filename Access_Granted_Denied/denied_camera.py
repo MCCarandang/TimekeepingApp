@@ -275,7 +275,7 @@ class AccessGrantedWindow(QMainWindow):
                 current_time = time.strftime("%Y-%m-%d %H:%M:%S")
 
                 # Check if RFID is authorized
-                cursor.execute("SELECT id FROM employees WHERE rfid_tag = ?", (rfid_str,))
+                cursor.execute("SELECT id_number FROM employees WHERE rfid_tag = ?", (rfid_str,))
                 result = cursor.fetchone()
 
                 if result:
@@ -339,7 +339,7 @@ class AccessGrantedWindow(QMainWindow):
                     cursor.execute("""
                         INSERT INTO attd_logs (id_number, rfid_tag, transaction_code, transaction_time)
                         VALUES (?, ?, ?, ?)
-                    """, (id_number, rfid_str, transaction_type, current_time))
+                    """, (employee_id, rfid_str, transaction_type, current_time))
                 
                     self.message_label.setText("ACCESS GRANTED")
                     self.transaction_code_label.setText(get_label_from_code(transaction_type))
@@ -347,7 +347,7 @@ class AccessGrantedWindow(QMainWindow):
                     # Fetch and display user info
                     cursor.execute(""" 
                         SELECT first_name, middle_name, last_name, id_number, photo 
-                        FROM employees WHERE id = ? 
+                        FROM employees WHERE id_number = ? 
                     """, (employee_id,))
                     emp_info = cursor.fetchone()
                 
@@ -389,9 +389,9 @@ class AccessGrantedWindow(QMainWindow):
                     
                     # Insert into denied_usr with photo_blob
                     cursor.execute(""" 
-                        INSERT INTO denied_usr (id_number, rfid_tag, transaction_code, photo, attempt_time) 
-                        VALUES (?, ?, ?, ?, ?) 
-                    """, (id_number, rfid_str, new_transaction_code, photo_blob, current_time))
+                        INSERT INTO denied_usr (rfid_tag, transaction_code, photo, attempt_time) 
+                        VALUES (?, ?, ?, ?) 
+                    """, (rfid_str, new_transaction_code, photo_blob, current_time))
 
                     self.message_label.setText("ACCESS DENIED")
                     self.transaction_code_label.setText(get_label_from_code(new_transaction_code))
