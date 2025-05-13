@@ -17,7 +17,7 @@ class AccessDeniedScreen(QWidget):
     def init_ui(self):
         main_layout = QVBoxLayout()
         main_layout.setSpacing(0)
-        main_layout.setContentsMargins(30, 30, 30, 30)
+        main_layout.setContentsMargins(0, 30, 0, 30)
 
         # Top bar: "IN" on the left and datetime on the right
         top_bar = QHBoxLayout()

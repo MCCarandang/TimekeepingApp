@@ -47,7 +47,7 @@ class AttendanceScreen(QWidget):
 
         # Employee details section
         info_container = QHBoxLayout()
-        info_container.setContentsMargins(50, 30, 50, 30)
+        info_container.setContentsMargins(0, 0, 0, 30)
         info_widget = QWidget()
         info_widget.setStyleSheet("background-color: #fff176;")  # Light yellow
         info_layout = QHBoxLayout()
