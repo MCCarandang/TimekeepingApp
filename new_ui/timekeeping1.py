@@ -82,18 +82,11 @@ class AccessGrantedWindow(QMainWindow):
         self.exit_button.setStyleSheet("background-color: white;")
         self.exit_button.clicked.connect(QApplication.quit)
 
-        # Create vertical layout for name and ID
-        name_id_layout = QVBoxLayout()
-        name_id_layout.addWidget(self.user_name_label)
-        name_id_layout.addWidget(self.id_number_label)
-        name_id_layout.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-
-        # Create horizontal layout with photo on the left and name/ID on the right
-        user_info_group = QHBoxLayout()
+        # Group user info (VBox)
+        user_info_group = QVBoxLayout()
+        user_info_group.addWidget(self.user_name_label)
+        user_info_group.addWidget(self.id_number_label)
         user_info_group.addWidget(self.photo_label)
-        user_info_group.addLayout(name_id_layout)
-
-        # Wrap in a widget
         user_info_widget = QWidget()
         user_info_widget.setLayout(user_info_group)
         
