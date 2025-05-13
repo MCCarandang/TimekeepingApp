@@ -281,7 +281,7 @@ class AccessGrantedWindow(QMainWindow):
                 if result:
                     employee_id = result[0]
                 
-                    # Determine last transaction
+                    # Get the last transaction (most recent log)
                     cursor.execute(""" 
                         SELECT transaction_code, transaction_time FROM attd_logs 
                         WHERE id_number = ?
@@ -298,42 +298,40 @@ class AccessGrantedWindow(QMainWindow):
                         time_diff = time.mktime(now_struct) - time.mktime(last_time_struct)
                 
                         if last_code == 'I' and time_diff < 5:
-                            # Repeated scan after Time IN
-                            self.clear_user_info()  # clear user info immediately
+                            # Repeated scan within 5 seconds of a Time IN
+                            self.clear_user_info()
                             self.message_label.setText("REPEATED ACTION")
                             self.transaction_code_label.setText("IN")
-                            
-                            # Check if a repeated scan already exists for the same RFID and transaction code
+                
+                            # Check if a repeated scan already exists for this base time in
                             cursor.execute("""
                                 SELECT id, scan_count FROM repeated_scans
-                                WHERE rfid_tag = ? AND transaction_code = 'I'
-                                ORDER BY scan_time DESC LIMIT 1
-                            """,(rfid_str,))
-                            existing_scan = cursor.fetchone()
-                            
-                            if existing_scan:
-                                # Update scan_count by incrementing it
-                                scan_id, current_count = existing_scan
+                                WHERE rfid_tag = ? AND base_timein = ? AND transaction_code = 'I'
+                            """, (rfid_str, last_time))
+                            existing = cursor.fetchone()
+                
+                            if existing:
+                                scan_id, scan_count = existing
                                 cursor.execute("""
                                     UPDATE repeated_scans
                                     SET scan_count = ?, scan_time = ?
                                     WHERE id = ?
-                                """, (current_count + 1, current_time, scan_id))
+                                """, (scan_count + 1, current_time, scan_id))
                             else:
-                                # Insert new record with scan_count = 1
                                 cursor.execute("""
-                                    INSERT INTO repeated_scans (rfid_tag, transaction_code, scan_time)
-                                    VALUES (?, 'I', ?)
-                                """, (rfid_str, current_time))
+                                    INSERT INTO repeated_scans (rfid_tag, transaction_code, base_timein, scan_count, scan_time)
+                                    VALUES (?, 'I', ?, 1, ?)
+                                """, (rfid_str, last_time, current_time))
                 
                             conn.commit()
                             conn.close()
                             QTimer.singleShot(3000, self.reset_ui)
                             return
                 
+                        # Continue with regular flow
                         transaction_type = 'O' if last_code == 'I' else 'I'
                     else:
-                        transaction_type = 'I'  # First-ever log is always IN
+                        transaction_type = 'I'  # First-ever log
                 
                     # Log attendance
                     cursor.execute("""
