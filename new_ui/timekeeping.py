@@ -46,7 +46,7 @@ class AccessGrantedWindow(QMainWindow):
         # Create the labels
         self.date_time_label = QLabel()
         self.transaction_code_label = QLabel("IN")
-        self.message_label = QLabel("TAP YOUR RFID TAG")
+        self.message_label = QLabel("TAP YOUR ID")
         self.user_name_label = QLabel("")
         self.id_number_label = QLabel("")
         self.department_label = QLabel("")
@@ -64,7 +64,6 @@ class AccessGrantedWindow(QMainWindow):
 
         self.message_label.setFont(QFont("Helvetica", 45, QFont.Bold))
         self.message_label.setStyleSheet("color: white;")
-        
         self.message_label.setAlignment(Qt.AlignCenter)
 
         self.user_name_label.setFont(QFont("Helvetica", 15, QFont.Bold))
@@ -94,6 +93,12 @@ class AccessGrantedWindow(QMainWindow):
         self.exit_button.setFixedSize(60, 30)
         self.exit_button.setStyleSheet("background-color: #f0f0ff;")
         self.exit_button.clicked.connect(QApplication.quit)
+        
+        top_info_layout = QHBoxLayout()
+        top_info_layout.setContentsMargins(10, 0, 10, 0)
+        top_info_layout.addWidget(self.transaction_code_label, alignment=Qt.AlignLeft)
+        top_info_layout.addStretch()
+        top_info_layout.addWidget(self.date_time_label, alignment=Qt.AlignRight)
 
         # Create vertical layout for name and ID
         name_id_layout = QVBoxLayout()
@@ -106,7 +111,7 @@ class AccessGrantedWindow(QMainWindow):
         # Create horizontal layout with photo on the left and name/ID on the right
         user_info_group = QHBoxLayout()
         user_info_group.addWidget(self.photo_label)
-        user_info_group.addSpacerItem(QSpacerItem(30, 0, QSizePolicy.Fixed, QSizePolicy.Minimum))
+        user_info_group.addSpacerItem(QSpacerItem(40, 0, QSizePolicy.Fixed, QSizePolicy.Minimum))
         user_info_group.addLayout(name_id_layout)
         user_info_group.setSpacing(8)
         
@@ -116,6 +121,7 @@ class AccessGrantedWindow(QMainWindow):
         
         # Horizontal layout: camera | user info | exit button
         camera_info_layout = QHBoxLayout()
+        camera_info_layout.setContentsMargins(10, 0, 10, 0)
         camera_info_layout.addWidget(self.camera_label, alignment=Qt.AlignLeft | Qt.AlignBottom)
         camera_info_layout.setSpacing(10)
         camera_info_layout.addWidget(user_info_widget, alignment=Qt.AlignCenter)
@@ -125,10 +131,8 @@ class AccessGrantedWindow(QMainWindow):
         # Final vertical layout for the label group
         label_layout = QVBoxLayout(self.label_group)
         label_layout.setContentsMargins(0, 5, 0, 5)
-        label_layout.setSpacing(10)
-        label_layout.addWidget(self.date_time_label)
-        label_layout.addWidget(self.transaction_code_label)
         label_layout.setSpacing(0)
+        label_layout.addLayout(top_info_layout)
         label_layout.addWidget(self.message_label)
         label_layout.addLayout(camera_info_layout)
         
@@ -136,6 +140,7 @@ class AccessGrantedWindow(QMainWindow):
         central_widget = QWidget()
         main_layout = QVBoxLayout(central_widget)
         main_layout.addWidget(self.label_group)
+        main_layout.setContentsMargins(0, 5, 0, 5)
         
         self.setCentralWidget(central_widget)
 
@@ -216,7 +221,7 @@ class AccessGrantedWindow(QMainWindow):
         #Trigger IN/OUT label without accessing the database
         self.current_state = "OUT" if self.current_state == "IN" else "IN"
         self.transaction_code_label.setText(self.current_state)
-        self.message_label.setText("TAP YOUR RFID TAG")
+        self.message_label.setText("TAP YOUR ID")
         self.user_name_label.clear()
         self.id_number_label.clear()
         self.department_label.clear()
@@ -345,7 +350,7 @@ class AccessGrantedWindow(QMainWindow):
                     """, (employee_id, rfid_str, transaction_type, current_time))
                 
                     self.message_label.setText("ACCESS GRANTED")
-                    self.message_label.setFont(QFont("Helvetica", 18, QFont.Bold))
+                    self.message_label.setFont(QFont("Helvetica", 15, QFont.Bold))
                     self.message_label.setFixedHeight(50)
                     self.message_label.setStyleSheet("background-color: yellow; color: black;")
                     self.transaction_code_label.setText(get_label_from_code(transaction_type))
@@ -408,7 +413,7 @@ class AccessGrantedWindow(QMainWindow):
                     """, (rfid_str, new_transaction_code, photo_blob, current_time))
 
                     self.message_label.setText("ACCESS DENIED")
-                    self.message_label.setFont(QFont("Helvetica", 18, QFont.Bold))
+                    self.message_label.setFont(QFont("Helvetica", 15, QFont.Bold))
                     self.message_label.setFixedHeight(50)
                     self.message_label.setStyleSheet("background-color: red; color: black;")
                     self.transaction_code_label.setText(get_label_from_code(new_transaction_code))
