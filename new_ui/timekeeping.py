@@ -6,6 +6,7 @@
 # Access Granted
 # Access Denied
 # Repeated Transaction
+# FINAL but speaker not yet working
 
 import sys
 import time
