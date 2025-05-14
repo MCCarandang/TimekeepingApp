@@ -31,6 +31,8 @@ class AccessGrantedWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Timekeeping")
         self.showFullScreen()
+        
+        self.can_accept_denied_scan = True
 
         # Set background color to navy
         self.setAutoFillBackground(True)
@@ -40,12 +42,14 @@ class AccessGrantedWindow(QMainWindow):
         
         # Create a QWidget as the container
         self.label_group = QWidget()
+
+        # Create the labels
         self.date_time_label = QLabel()
         self.transaction_code_label = QLabel("IN")
         self.message_label = QLabel("TAP YOUR RFID TAG")
         self.user_name_label = QLabel("")
         self.id_number_label = QLabel("")
-        self.dept_label = QLabel("")
+        self.department_label = QLabel("")
         self.timestamp_label = QLabel("")
         self.photo_label = QLabel()
 
@@ -60,23 +64,24 @@ class AccessGrantedWindow(QMainWindow):
 
         self.message_label.setFont(QFont("Helvetica", 45, QFont.Bold))
         self.message_label.setStyleSheet("color: white;")
+        
         self.message_label.setAlignment(Qt.AlignCenter)
 
         self.user_name_label.setFont(QFont("Helvetica", 15, QFont.Bold))
-        self.user_name_label.setStyleSheet("color: gray;")
-        # self.user_name_label.setAlignment(Qt.AlignCenter)
+        self.user_name_label.setStyleSheet("color: white;")
+        #self.user_name_label.setAlignment(Qt.AlignCenter)
 
         self.id_number_label.setFont(QFont("Helvetica", 15, QFont.Bold))
-        self.id_number_label.setStyleSheet("color: yellow;")
-        # self.id_number_label.setAlignment(Qt.AlignCenter)
-
-        self.dept_label.setFont(QFont("Helvetica", 15, QFont.Bold))
-        self.dept_label.setStyleSheet("color: gray")
-        # self.dept_label.setAlignment(Qt.AlignCenter)
-
+        self.id_number_label.setStyleSheet("color: white;")
+        #self.id_number_label.setAlignment(Qt.AlignCenter)
+        
+        self.department_label.setFont(QFont("Helvetica", 15, QFont.Bold))
+        self.department_label.setStyleSheet("color: white;")
+        #self.department_label.setAlignment(Qt.AlignCenter)
+        
         self.timestamp_label.setFont(QFont("Helvetica", 15, QFont.Bold))
-        self.timestamp_label.setStyleSheet("color: gray")
-        # self.timestamp_label.setAlignment(Qt.AlignCenter)
+        self.timestamp_label.setStyleSheet("color: white;")
+        #self.timestamp_label.setAlignment(Qt.AlignCenter)
 
         self.photo_label.setAlignment(Qt.AlignCenter)
         self.photo_label.setMaximumHeight(150)
@@ -85,27 +90,26 @@ class AccessGrantedWindow(QMainWindow):
         self.camera_label.setFixedSize(180, 180)
         self.camera_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
-        self.exit_button = QPushButton()
-        self.exit_button.setFixedSize(60, 20)
-        self.exit_button.setStyleSheet("background-color: white;")
+        self.exit_button = QPushButton("Exit")
+        self.exit_button.setFixedSize(60, 30)
+        self.exit_button.setStyleSheet("background-color: #f0f0ff;")
         self.exit_button.clicked.connect(QApplication.quit)
 
         # Create vertical layout for name and ID
         name_id_layout = QVBoxLayout()
         name_id_layout.addWidget(self.user_name_label)
         name_id_layout.addWidget(self.id_number_label)
-        name_id_layout.addWidget(self.dept_label)
+        name_id_layout.addWidget(self.department_label)
         name_id_layout.addWidget(self.timestamp_label)
-        name_id_layout.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-
+        name_id_layout.setAlignment(Qt.AlignLeft)
+        
         # Create horizontal layout with photo on the left and name/ID on the right
         user_info_group = QHBoxLayout()
         user_info_group.addWidget(self.photo_label)
         user_info_group.addSpacerItem(QSpacerItem(30, 0, QSizePolicy.Fixed, QSizePolicy.Minimum))
         user_info_group.addLayout(name_id_layout)
-        user_info_group.setAlignment(Qt.AlignLeft)
         user_info_group.setSpacing(8)
-
+        
         # Wrap in a widget
         user_info_widget = QWidget()
         user_info_widget.setLayout(user_info_group)
@@ -139,6 +143,7 @@ class AccessGrantedWindow(QMainWindow):
         self.camera.resolution = (180, 180)
         self.camera.rotation = 180
         self.setGeometry(0, 0, QApplication.desktop().screenGeometry().width(), QApplication.desktop().screenGeometry().height())
+        #self.camera.start_preview(fullscreen=False, window=(0, 900, 180, 180))
 
         # RFID Setup
         GPIO.setwarnings(False)
@@ -165,17 +170,20 @@ class AccessGrantedWindow(QMainWindow):
         
     def reset_ui(self):
         self.message_label.setText("TAP YOUR ID")
+        self.message_label.setFont(QFont("Helvetica", 45, QFont.Bold))
+        self.message_label.setStyleSheet("color: white;")
         self.transaction_code_label.setText("IN")
+        self.transaction_code_label.setStyleSheet("color: white;")
         self.user_name_label.setText("")
         self.id_number_label.setText("")
-        self.dept_label.setText("")
+        self.department_label.setText("")
         self.timestamp_label.setText("")
         self.photo_label.clear()
 
-    def show_user_info(self, name, id_number, dept, timestamp, photo_pixmap):
+    def show_user_info(self, name, id_number, department, timestamp, photo_pixmap):
         self.user_name_label.setText(name)
         self.id_number_label.setText(id_number)
-        self.dept_label.setText(dept)
+        self.department_label.setText(department)
         self.timestamp_label.setText(timestamp)
         self.photo_label.setPixmap(photo_pixmap)
         
@@ -188,7 +196,7 @@ class AccessGrantedWindow(QMainWindow):
     def clear_user_info(self):
         self.user_name_label.clear()
         self.id_number_label.clear()
-        self.dept_label.clear()
+        self.department_label.clear()
         self.timestamp_label.clear()
         self.photo_label.clear()
         
@@ -198,11 +206,11 @@ class AccessGrantedWindow(QMainWindow):
             self.transaction_code_label.setText("IN")
             self.message_label.setText("REPEATED ACTION")
         else:
-            name, id_number, dept, photo_pixmap = self.get_user_info(rfid_tag)
-            transaction_status = self.get_transaction_status(rfid_tag)
+            name, id_number, department, photo_pixmap = self.get_user_info(rfid_tag)
+            #transaction_status = self.get_transaction_status(rfid_tag)
             self.transaction_code_label.setText("IN" or "OUT")
             self.message_label.setText("ACCESS GRANTED")
-            self.show_user_info(name, id_number, dept, photo_pixmap)
+            self.show_user_info(name, id_number, department, photo_pixmap)
             
     def handle_special_tag(self):
         #Trigger IN/OUT label without accessing the database
@@ -211,7 +219,7 @@ class AccessGrantedWindow(QMainWindow):
         self.message_label.setText("TAP YOUR RFID TAG")
         self.user_name_label.clear()
         self.id_number_label.clear()
-        self.dept_label.clear()
+        self.department_label.clear()
         self.timestamp_label.clear()
         self.photo_label.clear()
 
@@ -295,7 +303,10 @@ class AccessGrantedWindow(QMainWindow):
                             # Repeated scan within 5 seconds of a Time IN
                             self.clear_user_info()
                             self.message_label.setText("REPEATED ACTION")
+                            self.message_label.setFont(QFont("Helvetica", 45, QFont.Bold))
+                            self.message_label.setStyleSheet("color: yellow;")
                             self.transaction_code_label.setText("IN")
+                            self.transaction_code_label.setStyleSheet("color: yellow;")
                 
                             # Check if a repeated scan already exists for this base time in
                             cursor.execute("""
@@ -334,11 +345,15 @@ class AccessGrantedWindow(QMainWindow):
                     """, (employee_id, rfid_str, transaction_type, current_time))
                 
                     self.message_label.setText("ACCESS GRANTED")
+                    self.message_label.setFont(QFont("Helvetica", 18, QFont.Bold))
+                    self.message_label.setFixedHeight(50)
+                    self.message_label.setStyleSheet("background-color: yellow; color: black;")
                     self.transaction_code_label.setText(get_label_from_code(transaction_type))
+                    self.transaction_code_label.setStyleSheet("color: yellow;")
                 
                     # Fetch and display user info
                     cursor.execute(""" 
-                        SELECT first_name, middle_name, last_name, id_number, department, photo 
+                        SELECT first_name, middle_name, last_name, id_number, photo, department 
                         FROM employees WHERE id_number = ? 
                     """, (employee_id,))
                     emp_info = cursor.fetchone()
@@ -348,12 +363,12 @@ class AccessGrantedWindow(QMainWindow):
                         id_number = emp_info[3]
                         photo_path = emp_info[4]
                         department = emp_info[5]
-                        current_time = time.strftime("%Y-%m-%d %H:%M")
+                        current_time = time.strftime("%H:%M | %Y-%m-%d")
                 
                         self.user_name_label.setText(full_name)
                         self.id_number_label.setText(f"ID: {id_number}")
-                        self.dept_label.setText(f"{department}")
-                        self.timestamp_label.setText(current_time)
+                        self.department_label.setText(f"{department}")
+                        self.timestamp_label.setText(f"{current_time}")
                 
                         if photo_path:
                             pixmap = QPixmap()
@@ -366,6 +381,9 @@ class AccessGrantedWindow(QMainWindow):
                             self.photo_label.setText("Photo not found")
 
                 else:
+                    if not self.can_accept_denied_scan:
+                        return # Skip processing if cooldown is active
+                    
                     # UNAUTHORIZED: No repeated scan logic
                     cursor.execute(""" 
                         SELECT transaction_code FROM denied_usr 
@@ -390,7 +408,15 @@ class AccessGrantedWindow(QMainWindow):
                     """, (rfid_str, new_transaction_code, photo_blob, current_time))
 
                     self.message_label.setText("ACCESS DENIED")
+                    self.message_label.setFont(QFont("Helvetica", 18, QFont.Bold))
+                    self.message_label.setFixedHeight(50)
+                    self.message_label.setStyleSheet("background-color: red; color: black;")
                     self.transaction_code_label.setText(get_label_from_code(new_transaction_code))
+                    self.transaction_code_label.setStyleSheet("color: red;")
+                    
+                    # Prevent immediate next scan
+                    self.can_accept_denied_scan = False
+                    QTimer.singleShot(2000, lambda: setattr(self, 'can_accept_denied_scan', True))	# Wait 2 seconds before allowing next scan
 
                 conn.commit()
                 conn.close()
