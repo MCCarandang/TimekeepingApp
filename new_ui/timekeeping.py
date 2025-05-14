@@ -46,6 +46,7 @@ class AccessGrantedWindow(QMainWindow):
         self.user_name_label = QLabel("")
         self.id_number_label = QLabel("")
         self.dept_label = QLabel("")
+        self.timestamp_label = QLabel("")
         self.photo_label = QLabel()
 
         # Set fonts and styles
@@ -63,15 +64,19 @@ class AccessGrantedWindow(QMainWindow):
 
         self.user_name_label.setFont(QFont("Helvetica", 15, QFont.Bold))
         self.user_name_label.setStyleSheet("color: gray;")
-        self.user_name_label.setAlignment(Qt.AlignCenter)
+        # self.user_name_label.setAlignment(Qt.AlignCenter)
 
         self.id_number_label.setFont(QFont("Helvetica", 15, QFont.Bold))
         self.id_number_label.setStyleSheet("color: yellow;")
-        self.id_number_label.setAlignment(Qt.AlignCenter)
+        # self.id_number_label.setAlignment(Qt.AlignCenter)
 
         self.dept_label.setFont(QFont("Helvetica", 15, QFont.Bold))
         self.dept_label.setStyleSheet("color: gray")
-        self.dept_label.setAlignment(Qt.AlignCenter)
+        # self.dept_label.setAlignment(Qt.AlignCenter)
+
+        self.timestamp_label.setFont(QFont("Helvetica", 15, QFont.Bold))
+        self.timestamp_label.setStyleSheet("color: gray")
+        # self.timestamp_label.setAlignment(Qt.AlignCenter)
 
         self.photo_label.setAlignment(Qt.AlignCenter)
         self.photo_label.setMaximumHeight(150)
@@ -90,12 +95,16 @@ class AccessGrantedWindow(QMainWindow):
         name_id_layout.addWidget(self.user_name_label)
         name_id_layout.addWidget(self.id_number_label)
         name_id_layout.addWidget(self.dept_label)
+        name_id_layout.addWidget(self.timestamp_label)
         name_id_layout.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
         # Create horizontal layout with photo on the left and name/ID on the right
         user_info_group = QHBoxLayout()
         user_info_group.addWidget(self.photo_label)
+        user_info_group.addSpacerItem(QSpacerItem(30, 0, QSizePolicy.Fixed, QSizePolicy.Minimum))
         user_info_group.addLayout(name_id_layout)
+        user_info_group.setAlignment(Qt.AlignLeft)
+        user_info_group.setSpacing(8)
 
         # Wrap in a widget
         user_info_widget = QWidget()
@@ -104,7 +113,7 @@ class AccessGrantedWindow(QMainWindow):
         # Horizontal layout: camera | user info | exit button
         camera_info_layout = QHBoxLayout()
         camera_info_layout.addWidget(self.camera_label, alignment=Qt.AlignLeft | Qt.AlignBottom)
-        camera_info_layout.setSpacing(100)
+        camera_info_layout.setSpacing(10)
         camera_info_layout.addWidget(user_info_widget, alignment=Qt.AlignCenter)
         camera_info_layout.addStretch()
         camera_info_layout.addWidget(self.exit_button, alignment=Qt.AlignRight | Qt.AlignBottom)
@@ -160,12 +169,14 @@ class AccessGrantedWindow(QMainWindow):
         self.user_name_label.setText("")
         self.id_number_label.setText("")
         self.dept_label.setText("")
+        self.timestamp_label.setText("")
         self.photo_label.clear()
 
-    def show_user_info(self, name, id_number, dept, photo_pixmap):
+    def show_user_info(self, name, id_number, dept, timestamp, photo_pixmap):
         self.user_name_label.setText(name)
         self.id_number_label.setText(id_number)
         self.dept_label.setText(dept)
+        self.timestamp_label.setText(timestamp)
         self.photo_label.setPixmap(photo_pixmap)
         
         # Show for 1 second
@@ -178,6 +189,7 @@ class AccessGrantedWindow(QMainWindow):
         self.user_name_label.clear()
         self.id_number_label.clear()
         self.dept_label.clear()
+        self.timestamp_label.clear()
         self.photo_label.clear()
         
     def handle_rfid_scan(self,rfid_tag):
@@ -200,6 +212,7 @@ class AccessGrantedWindow(QMainWindow):
         self.user_name_label.clear()
         self.id_number_label.clear()
         self.dept_label.clear()
+        self.timestamp_label.clear()
         self.photo_label.clear()
 
     def capture_denied_photo(self, transaction_code):
@@ -325,7 +338,7 @@ class AccessGrantedWindow(QMainWindow):
                 
                     # Fetch and display user info
                     cursor.execute(""" 
-                        SELECT first_name, middle_name, last_name, id_number, photo 
+                        SELECT first_name, middle_name, last_name, id_number, department, photo 
                         FROM employees WHERE id_number = ? 
                     """, (employee_id,))
                     emp_info = cursor.fetchone()
@@ -335,10 +348,12 @@ class AccessGrantedWindow(QMainWindow):
                         id_number = emp_info[3]
                         photo_path = emp_info[4]
                         department = emp_info[5]
+                        current_time = time.strftime("%Y-%m-%d %H:%M")
                 
                         self.user_name_label.setText(full_name)
                         self.id_number_label.setText(f"ID: {id_number}")
                         self.dept_label.setText(f"{department}")
+                        self.timestamp_label.setText(current_time)
                 
                         if photo_path:
                             pixmap = QPixmap()
