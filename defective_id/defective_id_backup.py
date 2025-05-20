@@ -303,8 +303,7 @@ class AccessGrantedWindow(QMainWindow):
             id_found = self.detect_id(frame)
             current_time = time.time()
 
-            # You can replace this with a shared variable later
-            rfid_recently_scanned = False  # Placeholder. Real logic should update this.
+            rfid_recently_scanned = False  # Replace with shared flag logic if needed
 
             if id_found:
                 if not self.id_currently_visible:
@@ -314,8 +313,29 @@ class AccessGrantedWindow(QMainWindow):
 
                 if (current_time - self.last_id_detected_time > self.TIME_THRESHOLD 
                     and not rfid_recently_scanned and not self.photo_captured):
-                    self.capture_denied_photo(self.current_state[0])  # 'I' or 'O'
-                    print("[INFO] No RFID detected. Denied photo captured.")
+
+                    # Capture and save photo to file
+                    transaction_code = self.current_state[0]  # 'I' or 'O'
+                    file_path = self.capture_denied_photo(transaction_code)
+
+                    if file_path:
+                        # Read image as binary
+                        with open(file_path, 'rb') as file:
+                            photo_blob = file.read()
+
+                        current_time = time.strftime("%Y-%m-%d %H:%M:%S")
+
+                        # Save to def_ids table
+                        try:
+                            conn = sqlite3.connect('/home/raspberrypi/Desktop/TimekeepingApp/timekeepingapp.db')
+                            cursor = conn.cursor()
+                            cursor.execute("INSERT INTO def_ids (photo, reported_time) VALUES (?, ?)", (photo_blob, current_time))
+                            conn.commit()
+                            conn.close()
+                            print("[INFO] Photo saved to def_ids.")
+                        except Exception as db_err:
+                            print(f"[ERROR] Failed to insert into def_ids: {db_err}")
+
                     self.photo_captured = True
             else:
                 self.id_currently_visible = False
