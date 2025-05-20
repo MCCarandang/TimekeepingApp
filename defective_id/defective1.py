@@ -1,24 +1,21 @@
-import sqlite3
 import cv2
-import os
 import time
-import numpy as np
-from picamera.array import PiRGBArray
-from datetime import datetime
-from picamera import PiCamera
 
-camera = PiCamera()
-camera.resolution = (180, 180)
-camera.vflip = True
-camera.hflip = True
+# Function to read RFID (placeholder for actual RFID reading logic)
+def read_rfid():
+    # Implement RFID reading logic here
+    # Return the RFID tag if detected, otherwise return None
+    pass
 
-# Ensure 'defective_ids' directory exists inside 'Timekeeping'
-save_dir = "/home/raspberrypi/Desktop/Timekeeping/defective_ids"
-os.makedirs(save_dir, exist_ok=True)
+# Function to capture ID (placeholder for actual capture logic)
+def capture_id(frame, x, y, w, h):
+    # Implement ID capture logic here
+    pass
 
-# Create a coonnection to the database
-conn = sqlite3.connect('/home/raspberrypi/Desktop/TimekeepingApp/timekeepingapp.db')
-cursor = conn.cursor()
+# Function to capture a photo when no RFID is detected
+def capture_photo(frame):
+    # Implement photo capture logic here
+    pass
 
 def detect_id(frame):
     # Convert frame to grayscale
@@ -28,7 +25,7 @@ def detect_id(frame):
     _, thresh = cv2.threshold(gray, 0, 180, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
 
     # Find contours of ID
-    contours,_ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     # Loop through contours for ID detection
     for contour in contours:
@@ -38,65 +35,48 @@ def detect_id(frame):
         # Check if contour has sufficient size for ID
         if area > 1000:
             # Draw rectangle around contour
-            cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 180, 0), 2)
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 180, 0), 2)
 
-            # Check if user tapped their ID on picamera
-            if cv2.waitKey(1) & 0xFF == ord("t"):
-                
-                # Capture Id
-                capture_id(frame, x, y, w, h)
-                break
+            # Capture ID
+            capture_id(frame, x, y, w, h)
+            return True  # ID detected
 
-def capture_id(frame, x, y, w, h, rfid_tag):
-    # Crop the detected ID region
-    cropped_id = frame[y:y+h, x:x+w]
+    return False  # No ID detected
 
-    # Create filename with timestamp
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"{rfid_tag}_{timestamp}.jpg"
-    file_path = os.path.join(save_dir, filename)
+def main_loop():
+    # Initialize camera
+    cap = cv2.VideoCapture(0)
+    timeout_duration = 5  # seconds
+    last_rfid_time = time.time()
 
-    # Save the image to disk
-    cv2.imwrite(file_path, cropped_id)
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
 
-    current_time = time.strftime("%Y-%m-%d %H:%M:%S")
+        # Check for RFID
+        rfid_tag = read_rfid()
+        if rfid_tag:
+            last_rfid_time = time.time()  # Reset timer if RFID detected
+            print(f"RFID detected: {rfid_tag}")
+        else:
+            # Check if timeout has occurred
+            if time.time() - last_rfid_time > timeout_duration:
+                capture_photo(frame)  # Capture photo if no RFID detected
 
-    # Convert image to binary (BLOB)
-    with open(file_path, 'rb') as f:
-        img_blob = f.read()
+        # Detect ID in the current frame
+        detect_id(frame)
 
-    # Save to SQLite database
-    try:
-        # Insert into database with current timestamp
-        cursor.execute("""
-            INSERT INTO def_ids (rfid_tag, photo, reported_time)
-            VALUES (?, ?, ?)
-        """, (rfid_tag, img_blob, current_time))
+        # Display the frame
+        cv2.imshow('Frame', frame)
 
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print(f"[ERROR] Failed to save to database: {e}")
+        # Break the loop on 'q' key press
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
 
-# Main Loop
-while True:
-    # Capture frame from picamera
-    camera.capture('temp.jpg')
-    frame = cv2.imread('temp.jpg')
+    # Release the camera and close windows
+    cap.release()
+    cv2.destroyAllWindows()
 
-    # Detect ID in frame
-    detect_id(frame)
-
-    # Display frame
-    cv2.imshow("Frame", frame)
-
-    # Move the window to the lower left side of the screen
-    cv2.moveWindow("Frame", 0, 290)  # Adjust the y-coordinate ad needed
-
-    # Check if user pressed 'q' to exit
-    if cv2.waitKey(1) & 0xFF == ord("q"):
-        break
-
-cv2.destroyAllWindows()
-camera.close()
-conn.close()
+if __name__ == "__main__":
+    main_loop()
