@@ -11,7 +11,6 @@
 import sys
 import time
 from time import sleep
-from datetime import datetime
 import os
 import sqlite3
 import RPi.GPIO as GPIO
@@ -36,10 +35,17 @@ class AccessGrantedWindow(QMainWindow):
         self.setWindowTitle("Timekeeping")
         self.showFullScreen()
         
-        camera = PiCamera()
-        camera.resolution = (180, 180)
-        camera.vflip = True
-        camera.hflip = True
+        self.can_accept_denied_scan = True
+        
+        self.last_id_detected_time = 0
+        self.id_currently_visible = False
+        self.photo_captured = False
+        self.TIME_THRESHOLD = 3  # seconds
+
+        self.cv_timer = QTimer(self)
+        self.cv_timer.timeout.connect(self.check_for_id_without_rfid)
+        self.cv_timer.start(500)
+
 
         # Set background color to navy
         self.setAutoFillBackground(True)
@@ -283,56 +289,40 @@ class AccessGrantedWindow(QMainWindow):
             x, y, w, h = cv2.boundingRect(contour)
 
             if area > 1000:
-                # Draw rectangle around contour
-                cv2.rectangle(frame, (x, y), (x + w, y +h), (0, 0, 180, 0), 2)
-
-                # Capture ID
-                self.capture_id(frame, x, y, w, h)
                 return True
         return False
 
-    def capture_id(self, frame, x, y, w, h):
-        # Define directory path
-        photo_dir = "/home/raspberrypi/Desktop/Timekeeping/defective_ids"
-
-        # Create directory if it doesn't exist
-        if not os.path.exists(photo_dir):
-            os.makedirs(photo_dir)
-
-        # Get current timestamp for filename (not needed for DB since reported_time is auto)
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-
-        # Crop the ID region
-        id_crop = frame[y:y+h, x:x+w]
-
-        # Generate debug filename
-        filename = f"id_{timestamp}.jpg"
-        full_path = os.path.join(photo_dir, filename)
-
-        # Save cropped image to disk (debugging)
-        cv2.imwrite(full_path, id_crop)
-
-        # Convert cropped image to JPEG binary
-        success, encoded_image = cv2.imencode('.jpg', id_crop)
-        if not success:
-            print("Failed to encode image.")
-            return
-
-        image_blob = encoded_image.tobytes()
-
-        current_time = time.strftime("%Y-%m-%d %H:%M:%S")
-
-        # Save to SQLite database (only storing photo as BLOB; reported_time is auto)
+    def check_for_id_without_rfid(self):
         try:
-            conn = sqlite3.connect('/home/raspberrypi/Desktop/Timekeeping/timekeeping.db')  # Adjust path as needed
-            cursor = conn.cursor()
-            cursor.execute('''
-                INSERT INTO def_ids (photo, reported_time) VALUES (?, ?)
-            ''', (image_blob, current_time))
-            conn.commit()
-            conn.close()
+            # Capture frame from PiCamera
+            stream = io.BytesIO()
+            self.camera.capture(stream, format='jpeg')
+            data = np.frombuffer(stream.getvalue(), dtype=np.uint8)
+            frame = cv2.imdecode(data, 1)
+
+            id_found = self.detect_id(frame)
+            current_time = time.time()
+
+            # You can replace this with a shared variable later
+            rfid_recently_scanned = False  # Placeholder. Real logic should update this.
+
+            if id_found:
+                if not self.id_currently_visible:
+                    self.last_id_detected_time = current_time
+                    self.photo_captured = False
+                self.id_currently_visible = True
+
+                if (current_time - self.last_id_detected_time > self.TIME_THRESHOLD 
+                    and not rfid_recently_scanned and not self.photo_captured):
+                    self.capture_denied_photo(self.current_state[0])  # 'I' or 'O'
+                    print("[INFO] No RFID detected. Denied photo captured.")
+                    self.photo_captured = True
+            else:
+                self.id_currently_visible = False
+                self.photo_captured = False
+
         except Exception as e:
-            print(f"[ERROR] Failed to save to database: {e}")
+            print(f"[ERROR] ID check failed: {e}")
         
     def check_rfid(self):
         try:
