@@ -41,6 +41,8 @@ class AccessGrantedWindow(QMainWindow):
         self.id_currently_visible = False
         self.photo_captured = False
         self.TIME_THRESHOLD = 3  # seconds
+        self.last_rfid_scan_time = 0
+        self.rfid_scan_timeout = 5
 
         self.cv_timer = QTimer(self)
         self.cv_timer.timeout.connect(self.check_for_id_without_rfid)
@@ -303,7 +305,7 @@ class AccessGrantedWindow(QMainWindow):
             id_found = self.detect_id(frame)
             current_time = time.time()
 
-            rfid_recently_scanned = False  # Replace with shared flag logic if needed
+            rfid_recently_scanned = (time.time() - self.last_rfid_scan_time) < self.rfid_scan_timeout
 
             if id_found:
                 if not self.id_currently_visible:
@@ -436,6 +438,7 @@ class AccessGrantedWindow(QMainWindow):
                     self.message_label.setStyleSheet("background-color: yellow; color: black;")
                     self.transaction_code_label.setText(get_label_from_code(transaction_type))
                     self.transaction_code_label.setStyleSheet("color: yellow;")
+                    self.last_rfid_scan_time = time.time()
                 
                     # Fetch and display user info
                     cursor.execute(""" 
@@ -499,6 +502,7 @@ class AccessGrantedWindow(QMainWindow):
                     self.message_label.setStyleSheet("background-color: red; color: black;")
                     self.transaction_code_label.setText(get_label_from_code(new_transaction_code))
                     self.transaction_code_label.setStyleSheet("color: red;")
+                    self.last_rfid_scan_time = time.time()
                     
                     # Prevent immediate next scan
                     self.can_accept_denied_scan = False
