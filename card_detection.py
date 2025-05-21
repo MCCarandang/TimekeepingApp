@@ -1,3 +1,5 @@
+# Can detect id card and draws rectangle around the detected object
+
 from picamera2 import Picamera2
 import cv2
 import numpy as np
@@ -12,6 +14,7 @@ def detect_id_card(frame):
     edged = cv2.Canny(blur, 50, 150)
 
     contours, _ = cv2.findContours(edged, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    frame_h, frame_w = frame.shape[:2]
 
     for cnt in contours:
         approx = cv2.approxPolyDP(cnt, 0.02 * cv2.arcLength(cnt, True), True)
@@ -20,7 +23,9 @@ def detect_id_card(frame):
             x, y, w, h = cv2.boundingRect(approx)
             aspect_ratio = float(w) / h
             if 1.3 < aspect_ratio < 1.7 and w > 100 and h > 60:
-                cv2.drawContours(frame, [approx], -1, (0, 255, 0), 2)
+
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                # cv2.drawContours(frame, [approx], -1, (0, 255, 0), 2)
                 cv2.putText(frame, "Possible ID Card", (x, y - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
