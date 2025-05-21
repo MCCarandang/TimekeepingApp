@@ -12,7 +12,7 @@ os.makedirs(save_dir, exist_ok=True)
 
 last_saved_time = 0
 save_interval = 5  # seconds
-confidence_threshold = 70  # Only save if confidence >= this value
+confidence_threshold = 40  # Only save if confidence >= this value
 
 def save_id_card(image, x, y, w, h, score):
     """Save cropped image with timestamp and detection log."""
