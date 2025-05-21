@@ -5,32 +5,42 @@ import time
 import os
 from datetime import datetime
 
-# === Directories and Log Setup ===
+# === Settings ===
 save_dir = "captured_ids"
 log_file = os.path.join(save_dir, "capture_log.csv")
 os.makedirs(save_dir, exist_ok=True)
 
-# Initialize cooldown to prevent duplicate captures
 last_saved_time = 0
-save_interval = 5  # seconds between saves
+save_interval = 5  # seconds
+confidence_threshold = 70  # Only save if confidence >= this value
 
-def save_id_card(image, x, y, w, h):
-    """Save the cropped ID card image and log the detection."""
+def save_id_card(image, x, y, w, h, score):
+    """Save cropped image with timestamp and detection log."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"id_{timestamp}.jpg"
     filepath = os.path.join(save_dir, filename)
 
-    # Crop and save the image
+    # Crop and save
     card_crop = image[y:y + h, x:x + w]
     cv2.imwrite(filepath, card_crop)
 
     # Log entry
-    log_entry = f"{timestamp},{filename},{x},{y},{w},{h}\n"
+    log_entry = f"{timestamp},{filename},{x},{y},{w},{h},{score:.2f}\n"
     with open(log_file, "a") as f:
         f.write(log_entry)
 
-    print(f"[INFO] ID card saved: {filename}")
+    print(f"[INFO] Saved ID with confidence {score:.2f}%: {filename}")
     return filename
+
+def calculate_confidence(aspect_ratio, w, h, area):
+    """Heuristic-based confidence score for ID shape."""
+    ideal_ar = 1.6
+    ar_score = max(0, 100 - abs(aspect_ratio - ideal_ar) * 100)
+
+    size_score = min(w * h / 20000, 100)  # Prefer larger sizes
+
+    combined = (0.6 * ar_score + 0.4 * size_score)
+    return min(combined, 100)
 
 def detect_id_card(frame):
     global last_saved_time
@@ -47,18 +57,22 @@ def detect_id_card(frame):
         if len(approx) == 4:
             x, y, w, h = cv2.boundingRect(approx)
             aspect_ratio = float(w) / h
-            ar = max(aspect_ratio, 1 / aspect_ratio)
+            area = w * h
 
-            if 1.3 < ar < 1.7 and w > 100 and h > 60:
+            if 1.3 < aspect_ratio < 1.7 and w > 100 and h > 60:
+                confidence = calculate_confidence(aspect_ratio, w, h, area)
+
+                # Draw rectangle and confidence score
                 cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                cv2.putText(frame, "Possible ID Card", (x, y - 10),
+                label = f"ID Card: {confidence:.1f}%"
+                cv2.putText(frame, label, (x, y - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
-                # === Save functionality ===
+                # Save if confidence is high enough
                 current_time = time.time()
-                if current_time - last_saved_time > save_interval:
+                if confidence >= confidence_threshold and (current_time - last_saved_time > save_interval):
                     last_saved_time = current_time
-                    save_id_card(frame, x, y, w, h)
+                    save_id_card(frame, x, y, w, h, confidence)
 
     return frame
 
