@@ -11,6 +11,7 @@ import io
 import RPi.GPIO as GPIO
 from mfrc522 import SimpleMFRC522
 from picamera import PiCamera
+import pygame
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QLabel, QVBoxLayout, QHBoxLayout,
     QWidget, QPushButton, QSizePolicy, QSpacerItem
@@ -23,6 +24,7 @@ SPECIAL_RFID_TAGS = {"529365863836", "452840563394"}
 DB_PATH = "/home/raspberrypi/Desktop/TimekeepingApp/timekeepingapp.db"
 DENIED_PHOTO_DIR = "/home/raspberrypi/Desktop/Timekeeping/denied_photos"
 REPEAT_SCAN_SECONDS = 5
+BUZZER_PIN = 18
 
 
 def get_label_from_code(code):
@@ -143,7 +145,24 @@ class AccessGrantedWindow(QMainWindow):
 
     def setup_rfid(self):
         GPIO.setwarnings(False)
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(BUZZER_PIN, GPIO.OUT)
         self.reader = SimpleMFRC522()
+        
+    def beep_success(self):
+        pwm = GPIO.PWM(BUZZER_PIN, 1000)
+        pwm.start(50)
+        sleep(0.5)
+        pwm.stop()
+        
+    def beep_failure(self):
+        # Two quick beeps
+        pwm = GPIO.PWM(BUZZER_PIN, 1000)
+        for _ in range(2):
+            pwm.start(50)
+            sleep(0.2)
+            pwm.stop()
+            sleep(0.2)
 
     def setup_timers(self):
         self.timer = QTimer(self)
@@ -286,6 +305,7 @@ class AccessGrantedWindow(QMainWindow):
             self.message_label.setStyleSheet("background-color: yellow; color: black;")
             self.transaction_code_label.setText(get_label_from_code(tx_type))
             self.transaction_code_label.setStyleSheet("color: yellow;")
+            self.beep_success()
             conn.commit()
         except Exception as e:
             print(f"Error in handle_authorized: {e}")
@@ -324,6 +344,7 @@ class AccessGrantedWindow(QMainWindow):
             self.message_label.setStyleSheet("background-color: red; color: black;")
             self.transaction_code_label.setText(get_label_from_code(tx_code))
             self.transaction_code_label.setStyleSheet("color: red;")
+            self.beep_failure()
             conn.commit()
         except Exception as e:
             print(f"Error in handle_unauthorized: {e}")
@@ -332,6 +353,10 @@ class AccessGrantedWindow(QMainWindow):
             self.can_accept_denied_scan = False
             QTimer.singleShot(2000, lambda: setattr(self, 'can_accept_denied_scan', True))
             QTimer.singleShot(3000, self.reset_ui)
+            
+    def closeEvent(self, event):
+        GPIO.cleanup()
+        event.accept()
 
     def is_repeated_scan(self, tag, employee_id):
         try:
@@ -357,6 +382,7 @@ class AccessGrantedWindow(QMainWindow):
             return False
         finally:
             conn.close()
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
