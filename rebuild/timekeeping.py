@@ -27,6 +27,7 @@ DENIED_PHOTO_DIR = "/home/raspberrypi/Desktop/Timekeeping/denied_photos"
 def get_label_from_code(code):
     return "IN" if code == 'I' else "OUT"
 
+
 class AccessGrantedWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -160,7 +161,7 @@ class AccessGrantedWindow(QMainWindow):
     def reset_ui(self):
         self.message_label.setText("TAP YOUR ID")
         self.message_label.setFont(QFont("Helvetica", 45, QFont.Bold))
-        self.message_label.setStyleSheet("color: white;")
+        self.message_label.setStyleSheet("color: white")
         self.transaction_code_label.setStyleSheet("color: white;")
         self.transaction_code_label.setText(self.current_state)
         for label in [self.user_name_label, self.id_number_label, self.department_label, self.timestamp_label]:
