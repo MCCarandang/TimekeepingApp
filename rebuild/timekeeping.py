@@ -22,6 +22,7 @@ from PyQt5.QtCore import Qt, QTimer, QDateTime
 SPECIAL_RFID_TAGS = {"529365863836", "452840563394"}
 DB_PATH = "/home/raspberrypi/Desktop/TimekeepingApp/timekeepingapp.db"
 DENIED_PHOTO_DIR = "/home/raspberrypi/Desktop/Timekeeping/denied_photos"
+REPEAT_SCAN_SECONDS = 5
 
 
 def get_label_from_code(code):
@@ -347,7 +348,7 @@ class AccessGrantedWindow(QMainWindow):
                 last_time_struct = time.strptime(last_time, "%Y-%m-%d %H:%M:%S")
                 now_struct = time.localtime()
                 time_diff = time.mktime(now_struct) - time.mktime(last_time_struct)
-                if last_code == 'I' and time_diff < 5:
+                if last_code == 'I' and time_diff < REPEAT_SCAN_SECONDS:
                     self.reset_ui()
                     return True
             return False
