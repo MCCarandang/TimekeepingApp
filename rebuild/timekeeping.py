@@ -27,7 +27,6 @@ DENIED_PHOTO_DIR = "/home/raspberrypi/Desktop/Timekeeping/denied_photos"
 def get_label_from_code(code):
     return "IN" if code == 'I' else "OUT"
 
-
 class AccessGrantedWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -99,6 +98,7 @@ class AccessGrantedWindow(QMainWindow):
 
     def setup_layouts(self):
         top_info_layout = QHBoxLayout()
+        top_info_layout.setContentsMargins(10, 0, 10, 0)
         top_info_layout.addWidget(self.transaction_code_label, alignment=Qt.AlignLeft)
         top_info_layout.addStretch()
         top_info_layout.addWidget(self.date_time_label, alignment=Qt.AlignRight)
@@ -116,12 +116,14 @@ class AccessGrantedWindow(QMainWindow):
         user_info_widget.setLayout(user_info_group)
 
         camera_info_layout = QHBoxLayout()
+        camera_info_layout.setContentsMargins(10, 0, 10, 0)
         camera_info_layout.addWidget(self.camera_label, alignment=Qt.AlignLeft | Qt.AlignBottom)
         camera_info_layout.addWidget(user_info_widget, alignment=Qt.AlignCenter)
         camera_info_layout.addStretch()
         camera_info_layout.addWidget(self.exit_button, alignment=Qt.AlignRight | Qt.AlignBottom)
 
         label_layout = QVBoxLayout(self.label_group)
+        label_layout.setContentsMargins(0, 5, 0, 5)
         label_layout.addLayout(top_info_layout)
         label_layout.addWidget(self.message_label)
         label_layout.addLayout(camera_info_layout)
@@ -129,6 +131,7 @@ class AccessGrantedWindow(QMainWindow):
         central_widget = QWidget()
         main_layout = QVBoxLayout(central_widget)
         main_layout.addWidget(self.label_group)
+        main_layout.setContentsMargins(0, 5, 0, 5)
         self.setCentralWidget(central_widget)
 
     def setup_camera(self):
@@ -156,6 +159,9 @@ class AccessGrantedWindow(QMainWindow):
 
     def reset_ui(self):
         self.message_label.setText("TAP YOUR ID")
+        self.message_label.setFont(QFont("Helvetica", 45, QFont.Bold))
+        self.message_label.setStyleSheet("color: white;")
+        self.transaction_code_label.setStyleSheet("color: white;")
         self.transaction_code_label.setText(self.current_state)
         for label in [self.user_name_label, self.id_number_label, self.department_label, self.timestamp_label]:
             label.clear()
@@ -273,6 +279,8 @@ class AccessGrantedWindow(QMainWindow):
                     self.photo_label.setText("Photo failed to load")
 
             self.message_label.setText("ACCESS GRANTED")
+            self.message_label.setFont(QFont("Helvetica", 15, QFont.Bold))
+            self.message_label.setFixedHeight(50)
             self.message_label.setStyleSheet("background-color: yellow; color: black;")
             self.transaction_code_label.setText(get_label_from_code(tx_type))
             self.transaction_code_label.setStyleSheet("color: yellow;")
@@ -309,6 +317,8 @@ class AccessGrantedWindow(QMainWindow):
             """, (tag, tx_code, photo_blob, now))
 
             self.message_label.setText("ACCESS DENIED")
+            self.message_label.setFont(QFont("Helvetica", 15, QFont.Bold))
+            self.message_label.setFixedHeight(50)
             self.message_label.setStyleSheet("background-color: red; color: black;")
             self.transaction_code_label.setText(get_label_from_code(tx_code))
             self.transaction_code_label.setStyleSheet("color: red;")
@@ -337,6 +347,7 @@ class AccessGrantedWindow(QMainWindow):
                 now_struct = time.localtime()
                 time_diff = time.mktime(now_struct) - time.mktime(last_time_struct)
                 if last_code == 'I' and time_diff < 5:
+                    self.reset_ui()
                     return True
             return False
         except Exception as e:
@@ -344,7 +355,6 @@ class AccessGrantedWindow(QMainWindow):
             return False
         finally:
             conn.close()
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
