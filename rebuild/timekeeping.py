@@ -1,0 +1,353 @@
+# Refactored timekeeping.py
+# Preserves functionality and UI of the original file
+
+import sys
+import time
+import os
+import sqlite3
+from time import sleep
+from PIL import Image
+import io
+import RPi.GPIO as GPIO
+from mfrc522 import SimpleMFRC522
+from picamera import PiCamera
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QLabel, QVBoxLayout, QHBoxLayout,
+    QWidget, QPushButton, QSizePolicy, QSpacerItem
+)
+from PyQt5.QtGui import QPalette, QColor, QFont, QPixmap, QImage
+from PyQt5.QtCore import Qt, QTimer, QDateTime
+
+# Constants
+SPECIAL_RFID_TAGS = {"529365863836", "452840563394"}
+DB_PATH = "/home/raspberrypi/Desktop/TimekeepingApp/timekeepingapp.db"
+DENIED_PHOTO_DIR = "/home/raspberrypi/Desktop/Timekeeping/denied_photos"
+
+
+def get_label_from_code(code):
+    return "IN" if code == 'I' else "OUT"
+
+
+class AccessGrantedWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Timekeeping")
+        self.showFullScreen()
+        self.can_accept_denied_scan = True
+        self.current_state = "IN"
+
+        self.setup_palette()
+        self.setup_ui()
+        self.setup_camera()
+        self.setup_rfid()
+        self.setup_timers()
+
+    def setup_palette(self):
+        palette = QPalette()
+        palette.setColor(QPalette.Window, QColor("navy"))
+        self.setPalette(palette)
+        self.setAutoFillBackground(True)
+
+    def setup_ui(self):
+        self.label_group = QWidget()
+
+        # Labels
+        self.date_time_label = QLabel()
+        self.transaction_code_label = QLabel("IN")
+        self.message_label = QLabel("TAP YOUR ID")
+        self.user_name_label = QLabel("")
+        self.id_number_label = QLabel("")
+        self.department_label = QLabel("")
+        self.timestamp_label = QLabel("")
+        self.photo_label = QLabel()
+        self.camera_label = QLabel()
+        self.exit_button = QPushButton("Exit")
+
+        self.setup_label_styles()
+        self.setup_layouts()
+
+    def setup_label_styles(self):
+        font_15 = QFont("Helvetica", 15)
+        font_15_bold = QFont("Helvetica", 15, QFont.Bold)
+        font_45_bold = QFont("Helvetica", 45, QFont.Bold)
+
+        self.date_time_label.setFont(font_15)
+        self.date_time_label.setStyleSheet("color: white;")
+        self.date_time_label.setAlignment(Qt.AlignRight | Qt.AlignTop)
+
+        self.transaction_code_label.setFont(font_45_bold)
+        self.transaction_code_label.setStyleSheet("color: white;")
+        self.transaction_code_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+
+        self.message_label.setFont(font_45_bold)
+        self.message_label.setStyleSheet("color: white;")
+        self.message_label.setAlignment(Qt.AlignCenter)
+
+        for label in [self.user_name_label, self.id_number_label, self.department_label, self.timestamp_label]:
+            label.setFont(font_15_bold)
+            label.setStyleSheet("color: white;")
+
+        self.photo_label.setAlignment(Qt.AlignCenter)
+        self.photo_label.setMaximumHeight(150)
+
+        self.camera_label.setFixedSize(180, 180)
+        self.camera_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+        self.exit_button.setFixedSize(60, 30)
+        self.exit_button.setStyleSheet("background-color: #f0f0ff;")
+        self.exit_button.clicked.connect(QApplication.quit)
+
+    def setup_layouts(self):
+        top_info_layout = QHBoxLayout()
+        top_info_layout.addWidget(self.transaction_code_label, alignment=Qt.AlignLeft)
+        top_info_layout.addStretch()
+        top_info_layout.addWidget(self.date_time_label, alignment=Qt.AlignRight)
+
+        name_id_layout = QVBoxLayout()
+        for label in [self.user_name_label, self.id_number_label, self.department_label, self.timestamp_label]:
+            name_id_layout.addWidget(label)
+        name_id_layout.setAlignment(Qt.AlignLeft)
+
+        user_info_group = QHBoxLayout()
+        user_info_group.addWidget(self.photo_label)
+        user_info_group.addSpacerItem(QSpacerItem(40, 0, QSizePolicy.Fixed, QSizePolicy.Minimum))
+        user_info_group.addLayout(name_id_layout)
+        user_info_widget = QWidget()
+        user_info_widget.setLayout(user_info_group)
+
+        camera_info_layout = QHBoxLayout()
+        camera_info_layout.addWidget(self.camera_label, alignment=Qt.AlignLeft | Qt.AlignBottom)
+        camera_info_layout.addWidget(user_info_widget, alignment=Qt.AlignCenter)
+        camera_info_layout.addStretch()
+        camera_info_layout.addWidget(self.exit_button, alignment=Qt.AlignRight | Qt.AlignBottom)
+
+        label_layout = QVBoxLayout(self.label_group)
+        label_layout.addLayout(top_info_layout)
+        label_layout.addWidget(self.message_label)
+        label_layout.addLayout(camera_info_layout)
+
+        central_widget = QWidget()
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.addWidget(self.label_group)
+        self.setCentralWidget(central_widget)
+
+    def setup_camera(self):
+        self.camera = PiCamera()
+        self.camera.resolution = (180, 180)
+        self.camera.rotation = 180
+
+    def setup_rfid(self):
+        GPIO.setwarnings(False)
+        self.reader = SimpleMFRC522()
+
+    def setup_timers(self):
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_date_time)
+        self.timer.start(1000)
+        self.update_date_time()
+
+        self.rfid_timer = QTimer(self)
+        self.rfid_timer.timeout.connect(self.process_rfid)
+        self.rfid_timer.start(500)
+
+    def update_date_time(self):
+        now = QDateTime.currentDateTime()
+        self.date_time_label.setText(now.toString("MM-dd-yyyy\nHH:mm:ss"))
+
+    def reset_ui(self):
+        self.message_label.setText("TAP YOUR ID")
+        self.transaction_code_label.setText(self.current_state)
+        for label in [self.user_name_label, self.id_number_label, self.department_label, self.timestamp_label]:
+            label.clear()
+        self.photo_label.clear()
+
+    def capture_denied_photo(self, transaction_code):
+        os.makedirs(DENIED_PHOTO_DIR, exist_ok=True)
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        filename = f"denied_{get_label_from_code(transaction_code)}_{timestamp}.jpg"
+        file_path = os.path.join(DENIED_PHOTO_DIR, filename)
+        try:
+            self.camera.capture(file_path)
+            image = Image.open(file_path).resize((180, 180)).convert("RGB")
+            data = image.tobytes("raw", "RGB")
+            qimage = QImage(data, image.width, image.height, QImage.Format_RGB888)
+            pixmap = QPixmap.fromImage(qimage)
+            self.camera_label.setPixmap(pixmap)
+            QTimer.singleShot(3000, self.clear_camera_label)
+            return file_path
+        except Exception as e:
+            print(f"Failed to capture denied photo: {e}")
+
+    def clear_camera_label(self):
+        self.camera_label.clear()
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            self.showNormal()
+
+    def process_rfid(self):
+        tag = self.read_tag()
+        if not tag:
+            return
+        if tag in SPECIAL_RFID_TAGS:
+            self.handle_special_tag()
+        elif self.is_authorized(tag):
+            self.handle_authorized(tag)
+        else:
+            self.handle_unauthorized(tag)
+
+    def read_tag(self):
+        try:
+            id, _ = self.reader.read_no_block()
+            return str(id) if id else None
+        except Exception as e:
+            print(f"Error reading RFID: {e}")
+            return None
+        
+    def handle_special_tag(self):
+        self.current_state = "OUT" if self.current_state == "IN" else "IN"
+        self.transaction_code_label.setText(self.current_state)
+        self.message_label.setText("TAP YOUR ID")
+        self.reset_ui()
+
+    def is_authorized(self, tag):
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("SELECT id_number FROM employees WHERE rfid_tag = ?", (tag,))
+            result = cursor.fetchone()
+            self.employee_id = result[0] if result else None
+            conn.close()
+            return result is not None
+        except Exception as e:
+            print(f"Database error in is_authorized: {e}")
+            return False
+
+    def handle_authorized(self, tag):
+        conn = None
+        try:
+            if self.is_repeated_scan(tag, self.employee_id):
+                self.message_label.setText("REPEATED ACTION")
+                self.message_label.setStyleSheet("color: yellow;")
+                self.transaction_code_label.setText("IN")
+                self.transaction_code_label.setStyleSheet("color: yellow;")
+                QTimer.singleShot(3000, self.reset_ui)
+                return
+
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            now = time.strftime("%Y-%m-%d %H:%M:%S")
+
+            # Determine transaction type
+            cursor.execute("""
+                SELECT transaction_code FROM attd_logs
+                WHERE id_number = ?
+                ORDER BY transaction_time DESC LIMIT 1
+            """, (self.employee_id,))
+            last = cursor.fetchone()
+            tx_type = 'O' if last and last[0] == 'I' else 'I'
+
+            cursor.execute("""
+                INSERT INTO attd_logs (id_number, rfid_tag, transaction_code, transaction_time)
+                VALUES (?, ?, ?, ?)
+            """, (self.employee_id, tag, tx_type, now))
+
+            cursor.execute("""
+                SELECT first_name, middle_name, last_name, id_number, photo, department
+                FROM employees WHERE id_number = ?
+            """, (self.employee_id,))
+            emp = cursor.fetchone()
+
+            if emp:
+                full_name = f"{emp[0]} {emp[1]} {emp[2]}"
+                self.user_name_label.setText(full_name)
+                self.id_number_label.setText(f"ID: {emp[3]}")
+                self.department_label.setText(emp[5])
+                self.timestamp_label.setText(time.strftime("%H:%M | %Y-%m-%d"))
+
+                pixmap = QPixmap()
+                pixmap.loadFromData(emp[4])
+                if not pixmap.isNull():
+                    self.photo_label.setPixmap(pixmap.scaled(150, 150, Qt.KeepAspectRatio))
+                else:
+                    self.photo_label.setText("Photo failed to load")
+
+            self.message_label.setText("ACCESS GRANTED")
+            self.message_label.setStyleSheet("background-color: yellow; color: black;")
+            self.transaction_code_label.setText(get_label_from_code(tx_type))
+            self.transaction_code_label.setStyleSheet("color: yellow;")
+            conn.commit()
+        except Exception as e:
+            print(f"Error in handle_authorized: {e}")
+        finally:
+            if conn:
+                conn.close()
+            QTimer.singleShot(3000, self.reset_ui)
+
+    def handle_unauthorized(self, tag):
+        if not self.can_accept_denied_scan:
+            return
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            now = time.strftime("%Y-%m-%d %H:%M:%S")
+
+            cursor.execute("""
+                SELECT transaction_code FROM denied_usr
+                WHERE rfid_tag = ? ORDER BY attempt_time DESC LIMIT 1
+            """, (tag,))
+            last = cursor.fetchone()
+            tx_code = 'O' if last and last[0] == 'I' else 'I'
+
+            photo_path = self.capture_denied_photo(tx_code)
+            with open(photo_path, 'rb') as file:
+                photo_blob = file.read()
+
+            cursor.execute("""
+                INSERT INTO denied_usr (rfid_tag, transaction_code, photo, attempt_time)
+                VALUES (?, ?, ?, ?)
+            """, (tag, tx_code, photo_blob, now))
+
+            self.message_label.setText("ACCESS DENIED")
+            self.message_label.setStyleSheet("background-color: red; color: black;")
+            self.transaction_code_label.setText(get_label_from_code(tx_code))
+            self.transaction_code_label.setStyleSheet("color: red;")
+            conn.commit()
+        except Exception as e:
+            print(f"Error in handle_unauthorized: {e}")
+        finally:
+            conn.close()
+            self.can_accept_denied_scan = False
+            QTimer.singleShot(2000, lambda: setattr(self, 'can_accept_denied_scan', True))
+            QTimer.singleShot(3000, self.reset_ui)
+
+    def is_repeated_scan(self, tag, employee_id):
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT transaction_code, transaction_time FROM attd_logs
+                WHERE id_number = ?
+                ORDER BY transaction_time DESC LIMIT 1
+            """, (employee_id,))
+            last_transaction = cursor.fetchone()
+            if last_transaction:
+                last_code, last_time = last_transaction
+                last_time_struct = time.strptime(last_time, "%Y-%m-%d %H:%M:%S")
+                now_struct = time.localtime()
+                time_diff = time.mktime(now_struct) - time.mktime(last_time_struct)
+                if last_code == 'I' and time_diff < 5:
+                    return True
+            return False
+        except Exception as e:
+            print(f"Error checking repeated scan: {e}")
+            return False
+        finally:
+            conn.close()
+
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = AccessGrantedWindow()
+    window.show()
+    sys.exit(app.exec_())
