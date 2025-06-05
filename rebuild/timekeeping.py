@@ -10,8 +10,10 @@ from PIL import Image
 import io
 import RPi.GPIO as GPIO
 from mfrc522 import SimpleMFRC522
-from picamera import PiCamera
+from picamera2 import Picamera2
 import pygame
+import cv2
+import numpy as np
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QLabel, QVBoxLayout, QHBoxLayout,
     QWidget, QPushButton, QSizePolicy, QSpacerItem
@@ -139,9 +141,15 @@ class AccessGrantedWindow(QMainWindow):
         self.setCentralWidget(central_widget)
 
     def setup_camera(self):
-        self.camera = PiCamera()
-        self.camera.resolution = (180, 180)
-        self.camera.rotation = 180
+        try:
+            self.picam2 = Picamera2()
+            config = self.picam2.create_still_configuration(main={"size": (640, 480), "format": "RGB888"})
+            self.picam2.configure(config)
+            self.picam2.start()
+            sleep(1)  # Allow camera to warm up
+        except Exception as e:
+            print(f"Failed to initialize PiCamera2: {e}")
+            self.picam2 = None
 
     def setup_rfid(self):
         GPIO.setwarnings(False)
@@ -189,21 +197,33 @@ class AccessGrantedWindow(QMainWindow):
         self.photo_label.clear()
 
     def capture_denied_photo(self, transaction_code):
+        if not self.picam2:
+            print("Camera not initialized")
+            return None
+    
         os.makedirs(DENIED_PHOTO_DIR, exist_ok=True)
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         filename = f"denied_{get_label_from_code(transaction_code)}_{timestamp}.jpg"
         file_path = os.path.join(DENIED_PHOTO_DIR, filename)
+        
         try:
-            self.camera.capture(file_path)
-            image = Image.open(file_path).resize((180, 180)).convert("RGB")
-            data = image.tobytes("raw", "RGB")
-            qimage = QImage(data, image.width, image.height, QImage.Format_RGB888)
-            pixmap = QPixmap.fromImage(qimage)
-            self.camera_label.setPixmap(pixmap)
+            frame = self.picam2.capture_array()
+            flipped_frame = cv2.rotate(frame, cv2.ROTATE_180)
+            cv2.imwrite(file_path, flipped_frame)
+
+            # Convert and display
+            rgb_image = cv2.cvtColor(flipped_frame, cv2.COLOR_BGR2RGB)
+            resized = cv2.resize(rgb_image, (180, 180))
+            height, width, channel = resized.shape
+            bytes_per_line = 3 * width
+            q_image = QImage(resized.data, width, height, bytes_per_line, QImage.Format_RGB888)
+            self.camera_label.setPixmap(QPixmap.fromImage(q_image))
+
             QTimer.singleShot(3000, self.clear_camera_label)
             return file_path
         except Exception as e:
-            print(f"Failed to capture denied photo: {e}")
+            print(f"Failed to capture or save denied photo: {e}")
+            return None
 
     def clear_camera_label(self):
         self.camera_label.clear()
@@ -317,6 +337,7 @@ class AccessGrantedWindow(QMainWindow):
     def handle_unauthorized(self, tag):
         if not self.can_accept_denied_scan:
             return
+        
         try:
             conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
@@ -330,13 +351,19 @@ class AccessGrantedWindow(QMainWindow):
             tx_code = 'O' if last and last[0] == 'I' else 'I'
 
             photo_path = self.capture_denied_photo(tx_code)
-            with open(photo_path, 'rb') as file:
-                photo_blob = file.read()
+            if photo_path and os.path.exists(photo_path):
+                with open(photo_path, 'rb') as file:
+                  photo_blob = file.read()
+
+            else:
+                photo_blob = None
 
             cursor.execute("""
                 INSERT INTO denied_usr (rfid_tag, transaction_code, photo, attempt_time)
                 VALUES (?, ?, ?, ?)
             """, (tag, tx_code, photo_blob, now))
+
+            conn.commit()
 
             self.message_label.setText("ACCESS DENIED")
             self.message_label.setFont(QFont("Helvetica", 15, QFont.Bold))
@@ -345,7 +372,6 @@ class AccessGrantedWindow(QMainWindow):
             self.transaction_code_label.setText(get_label_from_code(tx_code))
             self.transaction_code_label.setStyleSheet("color: red;")
             self.beep_failure()
-            conn.commit()
         except Exception as e:
             print(f"Error in handle_unauthorized: {e}")
         finally:
