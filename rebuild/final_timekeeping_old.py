@@ -21,7 +21,7 @@ from PyQt5.QtWidgets import (
     QWidget, QPushButton, QSizePolicy, QSpacerItem
 )
 from PyQt5.QtGui import QPalette, QColor, QFont, QPixmap, QImage
-from PyQt5.QtCore import Qt, QTimer, QDateTime, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer, QDateTime
 
 # ==== PATHS ====
 DB_PATH = "/home/raspberrypi/Desktop/TimekeepingApp/timekeepingapp.db"
@@ -39,36 +39,6 @@ BUZZER_PIN = 18
 
 def get_label_from_code(code):
     return "IN" if code == 'I' else "OUT"
-
-class IDDetectionThread(QThread):
-    detection_complete = pyqtSignal(np.ndarray, list)
-
-    def __init__(self, picam2, model):
-        super().__init__()
-        self.picam2 = picam2
-        self.model = model
-        self.running = True
-
-    def run(self):
-        while self.running:
-            try:
-                frame = self.picam2.capture_array()
-                frame = cv2.flip(frame, 0)
-                if frame.shape[2] == 4:
-                    frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
-
-                results = self.model(frame, verbose=False)[0]
-                frame_h, frame_w = frame.shape[:2]
-
-                for det in results.boxes:
-                    class_id = int(det.cls[0].item())
-                    if class_id == 0:
-                        x1, y1, x2, y2 = map(int, det.xyxy[0].tolist())
-                        self.detection_complete.emit(frame, [x1, y1, x2, y2])
-                        break
-            except Exception as e:
-                print("Detection error:", e)
-            self.msleep(500)  # delay between detections
 
 class AccessGrantedWindow(QMainWindow):
     def __init__(self):
@@ -90,7 +60,7 @@ class AccessGrantedWindow(QMainWindow):
         self.rfid_feedback = None
 
         self.id_detection_timer = QTimer()
-        self.id_detection_timer.timeout.connect(self.start_id_detection_thread)
+        self.id_detection_timer.timeout.connect(self.detect_id_card)
         self.id_detection_timer.start(500)
 
     def setup_palette(self):
@@ -309,15 +279,30 @@ class AccessGrantedWindow(QMainWindow):
         self.camera_label.hide()
         QTimer.singleShot(duration_ms, self.resume_camera_preview)
         
-    def start_id_detection_thread(self):
-        self.id_thread = IDDetectionThread(self.picam2, self.model)
-        self.id_thread.detection_complete.connect(self.on_id_detected)
-        self.id_thread.start()
+    def detect_id_card(self):
+        frame = self.picam2.capture_array()
+        frame = cv2.flip(frame, 0)
+        if frame.shape[2] == 4:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
 
-    def on_id_detected(self, frame, bbox):
-        if self.rfid_feedback:
-            return
-        self.handle_missing_rfid(frame, bbox)
+        results = self.model(frame, verbose=False)[0]
+        frame_h, frame_w = frame.shape[:2]
+
+        for det in results.boxes:
+            class_id = int(det.cls[0].item())
+            if class_id != 0:
+                continue
+
+            x1, y1, x2, y2 = map(int, det.xyxy[0].tolist())
+            x1 = max(0, x1)
+            y1 = max(0, y1)
+            x2 = min(frame_w - 1, x2)
+            y2 = min(frame_h - 1, y2)
+
+            if x2 > x1 and y2 > y1:
+                self.id_detection_timer.stop()
+                QTimer.singleShot(5000, lambda: self.handle_missing_rfid(frame, [x1, y1, x2, y2]))
+                return
     
     def handle_missing_rfid(self, frame, box):
         if self.rfid_feedback:
@@ -409,7 +394,6 @@ class AccessGrantedWindow(QMainWindow):
                 self.message_label.setStyleSheet("color: yellow;")
                 self.transaction_code_label.setText("IN")
                 self.transaction_code_label.setStyleSheet("color: yellow;")
-                self.hide_camera(3000)
                 QTimer.singleShot(3000, self.reset_ui)
                 return
 
@@ -541,6 +525,7 @@ class AccessGrantedWindow(QMainWindow):
             return False
         finally:
             conn.close()
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
