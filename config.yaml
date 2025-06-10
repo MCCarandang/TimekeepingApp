@@ -1,0 +1,8 @@
+model_path: "/home/raspberrypi/Desktop/Timekeepingapp/models/best.pt"
+capture_dir: "/home/raspberrypi/Desktop/Timekeepingapp/outputs/captures"
+csv_path: "/home/raspberrypi/Desktop/Timekeepingapp/outputs/metadata.csv"
+confidence_threshold: 0.5
+resolution: [1280, 720]
+label: "ID Card"
+headless: false
+fps_limit: 10  # Frames per second
