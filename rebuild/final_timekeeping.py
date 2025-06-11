@@ -24,12 +24,12 @@ from PyQt5.QtGui import QPalette, QColor, QFont, QPixmap, QImage
 from PyQt5.QtCore import Qt, QTimer, QDateTime, QThread, pyqtSignal
 
 # ==== PATHS ====
-DB_PATH = "/home/raspberrypi/Desktop/TimekeepingApp/timekeepingapp.db"
+DB_PATH = "/home/raspberrypi/Desktop/Timekeeping/timekeepingapp.db"
 DENIED_PHOTO_DIR_IN = "/home/raspberrypi/Desktop/Timekeeping/denied_photos_in"
 DENIED_PHOTO_DIR_OUT = "/home/raspberrypi/Desktop/Timekeeping/denied_photo_out"
-MODEL_PATH = "/home/raspberrypi/Desktop/TimekeepingApp/best.pt"
-CAPTURE_DIR = "/home/raspberrypi/Desktop/TimekeepingApp/outputs/captures"
-CSV_PATH = "/home/raspberrypi/Desktop/TimekeepingApp/outputs/metadata.csv"
+MODEL_PATH = "/home/raspberrypi/Desktop/Timekeeping//model/best.pt"
+CAPTURE_DIR = "/home/raspberrypi/Desktop/Timekeeping/outputs/captures"
+CSV_PATH = "/home/raspberrypi/Desktop/Timekeeping/outputs/metadata.csv"
 
 create_output_dir(CAPTURE_DIR)
 
@@ -41,7 +41,6 @@ BUZZER_PIN = 18
 def get_label_from_code(code):
     return "IN" if code == 'I' else "OUT"
 
-# Function to Detect an ID Card
 class IDDetectionThread(QThread):
     detection_complete = pyqtSignal(np.ndarray, list)
 
@@ -214,8 +213,7 @@ class AccessGrantedWindow(QMainWindow):
         except Exception as e:
             print(f"Failed to initialize PiCamera2: {e}")
             self.picam2 = None
-    
-    # Camera Preview
+
     def update_camera_preview(self):
         if not self.picam2:
             return
@@ -396,7 +394,6 @@ class AccessGrantedWindow(QMainWindow):
             print(f"Error reading RFID: {e}")
             return None
         
-    # Hardcoded RFID Tag
     def handle_special_tag(self):
         self.current_state = "OUT" if self.current_state == "IN" else "IN"
         self.transaction_code_label.setText(self.current_state)
@@ -416,7 +413,6 @@ class AccessGrantedWindow(QMainWindow):
             print(f"Database error in is_authorized: {e}")
             return False
 
-    # Handles Access Granted and Repeated Scan
     def handle_authorized(self, tag):
         conn = None
         try:
@@ -425,7 +421,6 @@ class AccessGrantedWindow(QMainWindow):
                 self.message_label.setStyleSheet("color: yellow;")
                 self.transaction_code_label.setText("IN")
                 self.transaction_code_label.setStyleSheet("color: yellow;")
-                self.clear_camera_label()
                 QTimer.singleShot(3000, self.reset_ui)
                 return
 
@@ -483,7 +478,6 @@ class AccessGrantedWindow(QMainWindow):
                 conn.close()
             QTimer.singleShot(3000, self.reset_ui)
 
-    # Handles Denied Access
     def handle_unauthorized(self, tag):
         if not self.can_accept_denied_scan:
             return
@@ -530,6 +524,60 @@ class AccessGrantedWindow(QMainWindow):
             QTimer.singleShot(2000, lambda: setattr(self, 'can_accept_denied_scan', True))
             QTimer.singleShot(3000, self.reset_ui)
             
+    def is_repeated_scan(self, rfid_str, employee_id):
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+
+            # Get the last transaction
+            cursor.execute("""
+                SELECT transaction_code, transaction_time FROM attd_logs
+                WHERE id_number = ?
+                ORDER BY transaction_time DESC LIMIT 1
+            """, (employee_id,))
+            last_transaction = cursor.fetchone()
+
+            current_time = time.strftime("%Y-%m-%d %H:%M:%S")
+
+            if last_transaction:
+                last_code, last_time = last_transaction
+                last_time_struct = time.strptime(last_time, "%Y-%m-%d %H:%M:%S")
+                now_struct = time.localtime()
+                time_diff = time.mktime(now_struct) - time.mktime(last_time_struct)
+
+                if last_code == 'I' and time_diff < REPEAT_SCAN_SECONDS:
+
+                    # Check if a repeated scan already exists
+                    cursor.execute("""
+                        SELECT id, scan_count FROM repeated_scans
+                        WHERE rfid_tag = ? AND base_timein = ? AND transaction_code = 'I'
+                    """, (rfid_str, last_time))
+                    existing = cursor.fetchone()
+
+                    if existing:
+                        scan_id, scan_count = existing
+                        cursor.execute("""
+                            UPDATE repeated_scans
+                            SET scan_count = ?, scan_time = ?
+                            WHERE id = ?
+                        """, (scan_count + 1, current_time, scan_id))
+                    else:
+                        cursor.execute("""
+                            INSERT INTO repeated_scans (rfid_tag, transaction_code, base_timein, scan_count, scan_time)
+                            VALUES (?, 'I', ?, 1, ?)
+                        """, (rfid_str, last_time, current_time))
+
+                    conn.commit()
+                    QTimer.singleShot(3000, self.reset_ui)
+                    return True
+
+            return False
+        except Exception as e:
+            print(f"Error checking repeated scan: {e}")
+            return False
+        finally:
+            conn.close()
+            
     def closeEvent(self, event):
         # Stop the detection thread if it exists
         if hasattr(self, 'id_thread') and self.id_thread:
@@ -542,31 +590,6 @@ class AccessGrantedWindow(QMainWindow):
         # Call the parent class's closeEvent
         super().closeEvent(event)
         event.accept()
-
-    def is_repeated_scan(self, tag, employee_id):
-        try:
-            conn = sqlite3.connect(DB_PATH)
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT transaction_code, transaction_time FROM attd_logs
-                WHERE id_number = ?
-                ORDER BY transaction_time DESC LIMIT 1
-            """, (employee_id,))
-            last_transaction = cursor.fetchone()
-            if last_transaction:
-                last_code, last_time = last_transaction
-                last_time_struct = time.strptime(last_time, "%Y-%m-%d %H:%M:%S")
-                now_struct = time.localtime()
-                time_diff = time.mktime(now_struct) - time.mktime(last_time_struct)
-                if last_code == 'I' and time_diff < REPEAT_SCAN_SECONDS:
-                    self.reset_ui()
-                    return True
-            return False
-        except Exception as e:
-            print(f"Error checking repeated scan: {e}")
-            return False
-        finally:
-            conn.close()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
