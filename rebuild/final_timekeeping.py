@@ -289,7 +289,6 @@ class AccessGrantedWindow(QMainWindow):
         file_path = os.path.join(DENIED_PHOTO_DIR, filename)
         
         self.camera_preview_timer.stop()
-        QTimer.singleShot(3000, self.resume_camera_preview)
 
         try:
             frame = self.picam2.capture_array()
@@ -304,7 +303,7 @@ class AccessGrantedWindow(QMainWindow):
             q_image = QImage(resized.data, width, height, bytes_per_line, QImage.Format_RGB888)
             self.camera_label.setPixmap(QPixmap.fromImage(q_image))
 
-            QTimer.singleShot(3000, self.clear_camera_label)
+            QTimer.singleShot(3000, self.resume_camera_preview)
             return file_path
         except Exception as e:
             print(f"Failed to capture or save denied photo: {e}")
@@ -331,12 +330,14 @@ class AccessGrantedWindow(QMainWindow):
 
         cropped = crop_image(frame, box)
         if cropped is not None and cropped.size > 0:
+            cropped_flipped = cv2.flip(cropped, 1)
+            
             # Generate filename & timestamp
             _, timestamp = get_timestamp()
             filename = f"{timestamp}.jpg"
             filepath = os.path.join(CAPTURE_DIR, filename)
 
-            cv2.imwrite(filepath, cropped)
+            cv2.imwrite(filepath, cropped_flipped)
 
             save_metadata(CSV_PATH, {
                 "filename": filename,
@@ -344,7 +345,7 @@ class AccessGrantedWindow(QMainWindow):
                 "x1": box[0], "y1": box[1], "x2": box[2], "y2": box[3]
             })
 
-            success, buffer = cv2.imencode(".jpg", cropped)
+            success, buffer = cv2.imencode(".jpg", cropped_flipped)
 
             now = time.strftime("%Y-%m-%d %H:%M:%S")
             if success:
@@ -412,7 +413,7 @@ class AccessGrantedWindow(QMainWindow):
                 self.message_label.setStyleSheet("color: yellow;")
                 self.transaction_code_label.setText("IN")
                 self.transaction_code_label.setStyleSheet("color: yellow;")
-                self.hide_camera(3000)
+                self.clear_camera_label()
                 QTimer.singleShot(3000, self.reset_ui)
                 return
 
@@ -460,7 +461,7 @@ class AccessGrantedWindow(QMainWindow):
             self.message_label.setStyleSheet("background-color: yellow; color: black;")
             self.transaction_code_label.setText(get_label_from_code(tx_type))
             self.transaction_code_label.setStyleSheet("color: yellow;")
-            self.hide_camera(3000)
+            self.clear_camera_label()
             self.beep_success()
             conn.commit()
         except Exception as e:
