@@ -48,6 +48,8 @@ class IDDetectionThread(QThread):
         self.picam2 = picam2
         self.model = model
         self.running = True
+        self.last_detection_time = 0
+        self.detection_interval = 2.0
 
     def run(self):
         while self.running:
@@ -62,13 +64,21 @@ class IDDetectionThread(QThread):
 
                 for det in results.boxes:
                     class_id = int(det.cls[0].item())
-                    if class_id == 0:
+                    conf = float(det.conf[0].item())
+
+                    # Detection Accuracy
+                    if class_id == 0 and conf > 0.5:   # Adjust threshlod if needed
                         x1, y1, x2, y2 = map(int, det.xyxy[0].tolist())
-                        self.detection_complete.emit(frame, [x1, y1, x2, y2])
-                        break
+                        now = time.time()
+
+                        # Apply detection cooldown
+                        if now - self.last_detection_time > self.detection_interval:
+                            self.last_detection_time = now
+                            self.detection_complete.emit(frame, [x1, y1, x2, y2])
+                            break
             except Exception as e:
                 print("Detection error:", e)
-            self.msleep(500)  # delay between detections
+            self.msleep(100)  # delay between detections
 
 class AccessGrantedWindow(QMainWindow):
     def __init__(self):
@@ -89,9 +99,9 @@ class AccessGrantedWindow(QMainWindow):
         self.cursor = self.db.cursor()
         self.rfid_feedback = None
 
-        self.id_detection_timer = QTimer()
-        self.id_detection_timer.timeout.connect(self.start_id_detection_thread)
-        self.id_detection_timer.start(500)
+        self.id_thread = IDDetectionThread(self.picam2, self.model)
+        self.id_thread.detection_complete.connect(self.on_id_detected)
+        self.id_thread.start()
 
     def setup_palette(self):
         palette = QPalette()
@@ -308,11 +318,6 @@ class AccessGrantedWindow(QMainWindow):
         self.camera_preview_timer.stop()
         self.camera_label.hide()
         QTimer.singleShot(duration_ms, self.resume_camera_preview)
-        
-    def start_id_detection_thread(self):
-        self.id_thread = IDDetectionThread(self.picam2, self.model)
-        self.id_thread.detection_complete.connect(self.on_id_detected)
-        self.id_thread.start()
 
     def on_id_detected(self, frame, bbox):
         if self.rfid_feedback:
@@ -322,7 +327,6 @@ class AccessGrantedWindow(QMainWindow):
     def handle_missing_rfid(self, frame, box):
         if self.rfid_feedback:
             self.rfid_feedback = None  # Reset for next loop
-            self.id_detection_timer.start(2000)
             return
 
         cropped = crop_image(frame, box)
@@ -352,7 +356,6 @@ class AccessGrantedWindow(QMainWindow):
                 QTimer.singleShot(3000, self.reset_ui)
 
         self.rfid_feedback = None
-        self.id_detection_timer.start()
 
     def clear_camera_label(self):
         self.camera_label.clear()
@@ -514,7 +517,16 @@ class AccessGrantedWindow(QMainWindow):
             QTimer.singleShot(3000, self.reset_ui)
             
     def closeEvent(self, event):
+        # Stop the detection thread if it exists
+        if hasattr(self, 'id_thread') and self.id_thread:
+            self.id_thread.running = False
+            self.id_thread.wait()
+        
+        # Clean up GPIO
         GPIO.cleanup()
+
+        # Call the parent class's closeEvent
+        super().closeEvent(event)
         event.accept()
 
     def is_repeated_scan(self, tag, employee_id):
