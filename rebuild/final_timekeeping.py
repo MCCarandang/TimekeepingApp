@@ -25,7 +25,8 @@ from PyQt5.QtCore import Qt, QTimer, QDateTime, QThread, pyqtSignal
 
 # ==== PATHS ====
 DB_PATH = "/home/raspberrypi/Desktop/TimekeepingApp/timekeepingapp.db"
-DENIED_PHOTO_DIR = "/home/raspberrypi/Desktop/Timekeeping/denied_photos"
+DENIED_PHOTO_DIR_IN = "/home/raspberrypi/Desktop/Timekeeping/denied_photos_in"
+DENIED_PHOTO_DIR_OUT = "/home/raspberrypi/Desktop/Timekeeping/denied_photo_out"
 MODEL_PATH = "/home/raspberrypi/Desktop/TimekeepingApp/best.pt"
 CAPTURE_DIR = "/home/raspberrypi/Desktop/TimekeepingApp/outputs/captures"
 CSV_PATH = "/home/raspberrypi/Desktop/TimekeepingApp/outputs/metadata.csv"
@@ -40,6 +41,7 @@ BUZZER_PIN = 18
 def get_label_from_code(code):
     return "IN" if code == 'I' else "OUT"
 
+# Function to Detect an ID Card
 class IDDetectionThread(QThread):
     detection_complete = pyqtSignal(np.ndarray, list)
 
@@ -212,14 +214,15 @@ class AccessGrantedWindow(QMainWindow):
         except Exception as e:
             print(f"Failed to initialize PiCamera2: {e}")
             self.picam2 = None
-
+    
+    # Camera Preview
     def update_camera_preview(self):
         if not self.picam2:
             return
     
         try:
             frame = self.picam2.capture_array()
-            frame = cv2.flip(frame, -1)
+            frame = cv2.flip(frame, 0)
             rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             resized = cv2.resize(rgb_image, (180, 180))
             h, w, ch = resized.shape
@@ -282,11 +285,18 @@ class AccessGrantedWindow(QMainWindow):
         if not self.picam2:
             print("Camera not initialized")
             return None
+        
+        # Choose directory based on transaction code
+        if transaction_code == 'I':
+            photo_dir = DENIED_PHOTO_DIR_IN
+        else:
+            photo_dir = DENIED_PHOTO_DIR_OUT
     
-        os.makedirs(DENIED_PHOTO_DIR, exist_ok=True)
+        os.makedirs(photo_dir, exist_ok=True)
+        
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         filename = f"denied_{get_label_from_code(transaction_code)}_{timestamp}.jpg"
-        file_path = os.path.join(DENIED_PHOTO_DIR, filename)
+        file_path = os.path.join(photo_dir, filename)
         
         self.camera_preview_timer.stop()
 
@@ -358,6 +368,9 @@ class AccessGrantedWindow(QMainWindow):
 
         self.rfid_feedback = None
 
+    def clear_camera_label(self):
+        self.camera_label.clear()
+
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
             self.showNormal()
@@ -383,6 +396,7 @@ class AccessGrantedWindow(QMainWindow):
             print(f"Error reading RFID: {e}")
             return None
         
+    # Hardcoded RFID Tag
     def handle_special_tag(self):
         self.current_state = "OUT" if self.current_state == "IN" else "IN"
         self.transaction_code_label.setText(self.current_state)
@@ -402,6 +416,7 @@ class AccessGrantedWindow(QMainWindow):
             print(f"Database error in is_authorized: {e}")
             return False
 
+    # Handles Access Granted and Repeated Scan
     def handle_authorized(self, tag):
         conn = None
         try:
@@ -410,6 +425,7 @@ class AccessGrantedWindow(QMainWindow):
                 self.message_label.setStyleSheet("color: yellow;")
                 self.transaction_code_label.setText("IN")
                 self.transaction_code_label.setStyleSheet("color: yellow;")
+                self.clear_camera_label()
                 QTimer.singleShot(3000, self.reset_ui)
                 return
 
@@ -457,6 +473,7 @@ class AccessGrantedWindow(QMainWindow):
             self.message_label.setStyleSheet("background-color: yellow; color: black;")
             self.transaction_code_label.setText(get_label_from_code(tx_type))
             self.transaction_code_label.setStyleSheet("color: yellow;")
+            self.clear_camera_label()
             self.beep_success()
             conn.commit()
         except Exception as e:
@@ -466,6 +483,7 @@ class AccessGrantedWindow(QMainWindow):
                 conn.close()
             QTimer.singleShot(3000, self.reset_ui)
 
+    # Handles Denied Access
     def handle_unauthorized(self, tag):
         if not self.can_accept_denied_scan:
             return
