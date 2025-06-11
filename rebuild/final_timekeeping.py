@@ -358,9 +358,6 @@ class AccessGrantedWindow(QMainWindow):
 
         self.rfid_feedback = None
 
-    def clear_camera_label(self):
-        self.camera_label.clear()
-
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
             self.showNormal()
@@ -413,7 +410,6 @@ class AccessGrantedWindow(QMainWindow):
                 self.message_label.setStyleSheet("color: yellow;")
                 self.transaction_code_label.setText("IN")
                 self.transaction_code_label.setStyleSheet("color: yellow;")
-                self.clear_camera_label()
                 QTimer.singleShot(3000, self.reset_ui)
                 return
 
@@ -461,7 +457,6 @@ class AccessGrantedWindow(QMainWindow):
             self.message_label.setStyleSheet("background-color: yellow; color: black;")
             self.transaction_code_label.setText(get_label_from_code(tx_type))
             self.transaction_code_label.setStyleSheet("color: yellow;")
-            self.clear_camera_label()
             self.beep_success()
             conn.commit()
         except Exception as e:
